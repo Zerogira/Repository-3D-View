@@ -40,7 +40,7 @@ class GitHubService:
         owner, repo = parts[0], parts[1]
         clean_slug = f"{owner}/{repo}"
         
-        # Build cache key based on repo slug and whether a custom token was provided
+        # Build cache key based on repo slug (lowercased) and whether a custom token was provided
         cache_key = f"{owner.lower()}/{repo.lower()}:has_token={bool(token)}"
         if cache_key in tree_cache:
             return tree_cache[cache_key]

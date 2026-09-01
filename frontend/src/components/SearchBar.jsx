@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { Search, Sparkles, FolderGit2, ArrowRight } from 'lucide-react';
 
 const PRESET_REPOS = [
-  { name: 'facebook/react', label: 'React', desc: 'UI Library' },
   { name: 'vuejs/core', label: 'Vue.js', desc: 'Framework' },
   { name: 'fastapi/fastapi', label: 'FastAPI', desc: 'Python API' },
   { name: 'tailwindlabs/tailwindcss', label: 'Tailwind', desc: 'CSS Framework' }

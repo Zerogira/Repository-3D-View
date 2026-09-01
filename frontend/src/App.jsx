@@ -11,12 +11,15 @@ import TokenModal from './components/TokenModal';
 import { fetchRepositoryGraph } from './services/api';
 
 export default function App() {
-  const [viewMode, setViewMode] = useState('3D');
-  const [activeRepo, setActiveRepo] = useState('facebook/react');
+  const [viewMode, setViewMode] = useState('2D');
+  const [activeRepo, setActiveRepo] = useState('vuejs/core');
   const [graphData, setGraphData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [errorStatus, setErrorStatus] = useState(null);
+  
+  // Full screen 3D modal state
+  const [is3DFullScreen, setIs3DFullScreen] = useState(false);
   
   // Selected Node state
   const [selectedNode, setSelectedNode] = useState(null);
@@ -32,8 +35,7 @@ export default function App() {
   useEffect(() => {
     const token = localStorage.getItem('gittree_github_token');
     setHasToken(Boolean(token && token.trim()));
-    // Initial default load
-    loadRepository('facebook/react');
+    loadRepository('vuejs/core');
   }, []);
 
   const loadRepository = async (repoSlug) => {
@@ -85,7 +87,7 @@ export default function App() {
           >
             Explore Repositórios em{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-400 to-purple-400 shadow-neon-cyan-sm">
-              3D Interativo
+              Árvores Interativas
             </span>
           </motion.h1>
           
@@ -95,7 +97,7 @@ export default function App() {
             transition={{ delay: 0.1 }}
             className="text-slate-400 text-sm md:text-base max-w-xl mx-auto"
           >
-            Mapeie visualmente a arquitetura de pastas (Cubos Ciano) e arquivos (Esferas Rosa) com física em tempo real.
+            Mapeie a arquitetura do seu projeto em 2D ou expanda para a experiência 3D em Tela Cheia.
           </motion.p>
 
           <SearchBar
@@ -138,15 +140,49 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* In-Graph Quick Live Search & Filter Tool */}
+        {/* In-Graph Quick Live Search & 3D Galaxy Trigger Button */}
         {graphData && !isLoading && (
           <div className="flex items-center justify-between flex-wrap gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800 backdrop-blur-md">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>Repositório Ativo:</span>
-              <code className="text-cyan-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 font-mono">
-                {graphData.repo} ({graphData.default_branch})
-              </code>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Repositório Ativo:</span>
+                <code className="text-cyan-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 font-mono">
+                  {graphData.repo} ({graphData.default_branch})
+                </code>
+              </div>
+
+              {/* Botões de Modo Galaxy 3D e Visualização 2D lado a lado */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setViewMode('3D');
+                    setIs3DFullScreen(true);
+                  }}
+                  className={`px-3.5 py-1.5 font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                    viewMode === '3D' && is3DFullScreen
+                      ? 'bg-gradient-to-r from-purple-600 via-cyan-500 to-pink-500 text-white shadow-neon-cyan'
+                      : 'bg-slate-900 border border-slate-700 text-slate-200 hover:border-cyan-500/50'
+                  }`}
+                >
+                  <span>🌌 Modo Galaxy 3D (Tela Cheia)</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setViewMode('2D');
+                    setIs3DFullScreen(false);
+                  }}
+                  className={`px-3.5 py-1.5 font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                    viewMode === '2D' && !is3DFullScreen
+                      ? 'bg-pink-500 text-slate-950 shadow-neon-pink-sm'
+                      : 'bg-slate-900 border border-slate-700 text-slate-200 hover:border-pink-500/50'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5 text-pink-400" />
+                  <span>Visualização 2D Plano</span>
+                </button>
+              </div>
             </div>
 
             {/* Filter Input */}
@@ -187,11 +223,13 @@ export default function App() {
                 </div>
               </div>
             ) : graphData ? (
-              viewMode === '3D' ? (
+              viewMode === '3D' || is3DFullScreen ? (
                 <GraphViewer3D
                   graphData={graphData}
                   onNodeClick={(node) => setSelectedNode(node)}
                   filterTerm={filterTerm}
+                  isFullScreen={is3DFullScreen}
+                  onToggleFullScreen={() => setIs3DFullScreen((prev) => !prev)}
                 />
               ) : (
                 <GraphViewer2D

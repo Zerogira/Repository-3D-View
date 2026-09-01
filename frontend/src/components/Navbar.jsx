@@ -30,33 +30,6 @@ export default function Navbar({ viewMode, setViewMode, onOpenTokenModal, hasTok
 
         {/* Action Controls */}
         <div className="flex items-center gap-3">
-          {/* 2D / 3D Mode Toggle */}
-          <div className="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800">
-            <button
-              onClick={() => setViewMode('3D')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                viewMode === '3D'
-                  ? 'bg-cyan-500 text-slate-950 shadow-neon-cyan-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Box className="w-3.5 h-3.5" />
-              3D Grafo
-            </button>
-
-            <button
-              onClick={() => setViewMode('2D')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                viewMode === '2D'
-                  ? 'bg-pink-500 text-slate-950 shadow-neon-pink-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              2D Plano
-            </button>
-          </div>
-
           {/* GitHub Token Config Button */}
           <button
             onClick={onOpenTokenModal}
