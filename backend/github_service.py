@@ -1,4 +1,5 @@
 import os
+import re
 import httpx
 from dotenv import load_dotenv
 from cachetools import TTLCache
@@ -22,14 +23,22 @@ class GitHubService:
         reconstructs full directory hierarchy (including implicit parent folders),
         and caches results in memory.
         """
-        clean_slug = repo_slug.strip().strip("/")
-        if not clean_slug or "/" not in clean_slug:
+        # Clean and parse repository slug or URL (e.g. 'https://github.com/owner/repo.git', 'owner/repo')
+        cleaned = repo_slug.strip()
+        cleaned = re.sub(r'^(https?://)?(www\.)?github\.com/', '', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'^git@github\.com:', '', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'\.git$', '', cleaned, flags=re.IGNORECASE)
+        cleaned = cleaned.strip('/')
+        
+        parts = [p for p in cleaned.split('/') if p]
+        if len(parts) < 2:
             raise HTTPException(
                 status_code=400,
-                detail="Formato de repositório inválido. Use o formato 'usuario/repositorio'."
+                detail="Formato de repositório inválido. Use 'usuario/repositorio' ou a URL completa do GitHub."
             )
         
-        owner, repo = clean_slug.split("/", 1)
+        owner, repo = parts[0], parts[1]
+        clean_slug = f"{owner}/{repo}"
         
         # Build cache key based on repo slug and whether a custom token was provided
         cache_key = f"{owner.lower()}/{repo.lower()}:has_token={bool(token)}"
