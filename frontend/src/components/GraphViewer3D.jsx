@@ -185,8 +185,14 @@ export default function GraphViewer3D({
             gl.setClearColor('#070a12');
           }}
         >
-          {/* Palco 3D: Luzes, OrbitControls (com trava de chão), Bússola e Stats */}
-          <SceneSetup />
+          {/* Palco 3D Dinâmico: Luzes, OrbitControls (com trava proporcional), Bússola e Stats */}
+          <SceneSetup
+            minY={calculatedData.layoutInfo?.minY || 0}
+            gridRadius={calculatedData.layoutInfo?.gridRadius || 600}
+            fogStart={calculatedData.layoutInfo?.fogStart || 300}
+            fogEnd={calculatedData.layoutInfo?.fogEnd || 700}
+            maxCameraDistance={calculatedData.layoutInfo?.maxCameraDistance || 650}
+          />
 
           {/* Atores 3D: GraphRenderer com InstancedMesh, LineSegments 1 Draw Call e WebGL Text LOD */}
           <GraphRenderer nodes={filteredNodes} links={calculatedData.links} />

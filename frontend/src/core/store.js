@@ -56,6 +56,11 @@ export const useAppStore = create((set) => ({
   setShowGrid: (show) => set({ showGrid: show }),
   toggleShowGrid: () => set((state) => ({ showGrid: !state.showGrid })),
 
+  // Auto Rotação da Cena 3D / Grid
+  autoRotate: true,
+  setAutoRotate: (auto) => set({ autoRotate: auto }),
+  toggleAutoRotate: () => set((state) => ({ autoRotate: !state.autoRotate })),
+
   // Estado do Web Worker / Carregamento do Grafo
   isLoadingGraph: false,
   setIsLoadingGraph: (isLoading) => set({ isLoadingGraph: isLoading }),

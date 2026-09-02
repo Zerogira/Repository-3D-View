@@ -10,7 +10,9 @@ echo.
 echo [FRONTEND] Verificando dependencias Node.js...
 if not exist "frontend\node_modules" (
     echo [FRONTEND] Instalando pacotes npm...
-    cd /d "%~dp0frontend" && call npm install && cd /d "%~dp0"
+    cd /d "%~dp0frontend"
+    call npm install --legacy-peer-deps
+    cd /d "%~dp0"
 )
 
 echo.

@@ -8,14 +8,15 @@ import * as THREE from 'three';
  * Compila todas as linhas de ligação em um único Float32Array + THREE.BufferGeometry e renderiza via <lineSegments>.
  */
 export default function EdgesRender({ nodes = [], links = [] }) {
-  // Mapeamento rápido de ID para Nó com Posições
-  const { positions, lineCount } = useMemo(() => {
+  // Separa as posições das conexões: Pasta -> Pasta vs Pasta -> Arquivo (Pilar)
+  const { folderPositions, filePositions } = useMemo(() => {
     if (!nodes.length || !links.length) {
-      return { positions: new Float32Array(0), lineCount: 0 };
+      return { folderPositions: new Float32Array(0), filePositions: new Float32Array(0) };
     }
 
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-    const validPositions = [];
+    const folderPosList = [];
+    const filePosList = [];
 
     links.forEach((link) => {
       const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
@@ -25,37 +26,61 @@ export default function EdgesRender({ nodes = [], links = [] }) {
       const targetNode = nodeMap.get(targetId);
 
       if (sourceNode && targetNode) {
-        // Ponto de início (Pai)
-        validPositions.push(sourceNode.x || 0, sourceNode.y || 0, sourceNode.z || 0);
-        // Ponto de fim (Filho)
-        validPositions.push(targetNode.x || 0, targetNode.y || 0, targetNode.z || 0);
+        const isTargetFile = targetNode.type !== 'dir' && !targetNode.isDir;
+        const targetList = isTargetFile ? filePosList : folderPosList;
+
+        targetList.push(sourceNode.x || 0, sourceNode.y || 0, sourceNode.z || 0);
+        targetList.push(targetNode.x || 0, targetNode.y || 0, targetNode.z || 0);
       }
     });
 
     return {
-      positions: new Float32Array(validPositions),
-      lineCount: validPositions.length / 6,
+      folderPositions: new Float32Array(folderPosList),
+      filePositions: new Float32Array(filePosList),
     };
   }, [nodes, links]);
 
-  // Cria a geometria do Three.js contendo todos os segmentos de linha unificados
-  const geometry = useMemo(() => {
+  // Geometria para as conexões entre Pastas (Ciano Brilhante)
+  const folderGeometry = useMemo(() => {
     const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setAttribute('position', new THREE.BufferAttribute(folderPositions, 3));
     return geom;
-  }, [positions]);
+  }, [folderPositions]);
 
-  if (lineCount === 0) return null;
+  // Geometria para as conexões dos Pilares de Arquivos (Cinza/Rosa Translúcido Sutil)
+  const fileGeometry = useMemo(() => {
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(filePositions, 3));
+    return geom;
+  }, [filePositions]);
 
   return (
-    <lineSegments geometry={geometry}>
-      <lineBasicMaterial
-        color="#38bdf8"
-        transparent
-        opacity={0.35}
-        linewidth={1}
-        depthWrite={false}
-      />
-    </lineSegments>
+    <group>
+      {/* 1. Conexões de Infraestrutura: Pasta -> Pasta (Ciano Neon Brilhante 0.85) */}
+      {folderPositions.length > 0 && (
+        <lineSegments geometry={folderGeometry}>
+          <lineBasicMaterial
+            color="#38bdf8"
+            transparent
+            opacity={0.85}
+            linewidth={2}
+            depthWrite={false}
+          />
+        </lineSegments>
+      )}
+
+      {/* 2. Conexões dos Pilares: Pasta -> Arquivo (Sutil, Transparente 0.25) */}
+      {filePositions.length > 0 && (
+        <lineSegments geometry={fileGeometry}>
+          <lineBasicMaterial
+            color="#94a3b8"
+            transparent
+            opacity={0.25}
+            linewidth={1}
+            depthWrite={false}
+          />
+        </lineSegments>
+      )}
+    </group>
   );
 }

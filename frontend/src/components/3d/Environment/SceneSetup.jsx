@@ -13,13 +13,23 @@ import { useAppStore } from '../../../core/store';
  * - Bússola de orientação <GizmoHelper/> condicional (showGizmo)
  * - Chão cibernético <FloorGrid/> condicional (showGrid)
  */
-export default function SceneSetup() {
+export default function SceneSetup({
+  minY = 0,
+  gridRadius = 600,
+  fogStart = 300,
+  fogEnd = 700,
+  maxCameraDistance = 650,
+}) {
   const showStats = useAppStore((s) => s.showStats);
   const showGizmo = useAppStore((s) => s.showGizmo);
   const showGrid = useAppStore((s) => s.showGrid);
+  const autoRotate = useAppStore((s) => s.autoRotate);
 
   return (
     <>
+      {/* Nevoeiro Linear Dinâmico: Ajustado automaticamente ao raio do nó mais distante do repositório */}
+      <fog attach="fog" args={['#070a12', fogStart, fogEnd]} />
+
       {/* Iluminação Cibernética */}
       <ambientLight intensity={0.6} />
       <directionalLight
@@ -33,14 +43,16 @@ export default function SceneSetup() {
       <pointLight position={[-150, 100, -150]} intensity={1.5} color="#22d3ee" distance={500} />
       <pointLight position={[150, 100, 150]} intensity={1.5} color="#ec4899" distance={500} />
 
-      {/* Trava Físico-Câmera: maxPolarAngle impede descer abaixo do chão em Y=0 */}
+      {/* Trava Físico-Câmera Dinâmica: maxDistance e maxPolarAngle sincronizados ao repositório */}
       <OrbitControls
         makeDefault
         enableDamping
         dampingFactor={0.05}
-        maxPolarAngle={Math.PI / 2 - 0.05}
+        maxPolarAngle={Math.PI / 2 - 0.02}
         minDistance={10}
-        maxDistance={1500}
+        maxDistance={maxCameraDistance}
+        autoRotate={autoRotate}
+        autoRotateSpeed={0.8}
       />
 
       {/* Painel de Métricas de Performance da GPU */}
@@ -57,8 +69,8 @@ export default function SceneSetup() {
         </GizmoHelper>
       )}
 
-      {/* Chão Cibernético */}
-      {showGrid && <FloorGrid />}
+      {/* Chão Cibernético Dinâmico Proporcional */}
+      {showGrid && <FloorGrid minY={minY} gridRadius={gridRadius} />}
     </>
   );
 }

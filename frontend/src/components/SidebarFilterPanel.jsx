@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  RotateCw,
 } from 'lucide-react';
 import { useAppStore } from '../core/store';
 import { CATEGORIES } from '../core/layoutEngine';
@@ -22,7 +23,7 @@ import { CATEGORIES } from '../core/layoutEngine';
  * Painel de Controle e Filtros Lateral Esquerdo Retrátil (Dark Mode Cyberpunk):
  * - Inicia aberto por padrão com transição suave (Framer Motion / CSS transform)
  * - Filtro por Categorias Funcionais (Frontend, Backend, Banco de Dados, Config, Docs)
- * - Toggles para recursos visuais 3D (Linhas, Rótulos, Bússola, Stats, Grade do Chão)
+ * - Toggles para recursos visuais 3D (Linhas, Rótulos, Bússola, Stats, Grade do Chão, Auto Rotação)
  */
 export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
   const isSidebarOpen = useAppStore((s) => s.isSidebarOpen);
@@ -47,6 +48,9 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
 
   const showGrid = useAppStore((s) => s.showGrid);
   const toggleShowGrid = useAppStore((s) => s.toggleShowGrid);
+
+  const autoRotate = useAppStore((s) => s.autoRotate);
+  const toggleAutoRotate = useAppStore((s) => s.toggleAutoRotate);
 
   // Calcula a quantidade de nós por categoria funcional
   const categoryCounts = React.useMemo(() => {
@@ -233,6 +237,24 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
             </div>
             <span className="text-[10px] font-bold uppercase">
               {showGrid ? 'ON' : 'OFF'}
+            </span>
+          </button>
+
+          {/* Toggle Rotação Automática (Grid / Cena 3D) */}
+          <button
+            onClick={toggleAutoRotate}
+            className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between border transition-all cursor-pointer ${
+              autoRotate
+                ? 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+                : 'bg-slate-900/50 border-slate-800 text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Rotação do Grid</span>
+            </div>
+            <span className="text-[10px] font-bold uppercase">
+              {autoRotate ? 'ON' : 'OFF'}
             </span>
           </button>
         </div>

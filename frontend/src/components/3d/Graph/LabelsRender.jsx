@@ -3,9 +3,9 @@ import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 
-const centerVector = new THREE.Vector3(0, 100, 0);
-const MAX_VISIBLE_LABELS = 250;
-const LOD_DISTANCE_THRESHOLD = 1400;
+const centerVector = new THREE.Vector3(0, 0, 0);
+const MAX_VISIBLE_LABELS = 1000;
+const LOD_DISTANCE_THRESHOLD = 3000;
 
 /**
  * Função utilitária para desenhar retângulos com cantos arredondados no Canvas 2D
@@ -131,34 +131,64 @@ function LabelCard({ node }) {
  * - LOD direto na GPU via useFrame sem re-renders no React.
  */
 export default function LabelsRender({ nodes = [] }) {
-  const groupRef = useRef();
+  const dirGroupRef = useRef();
+  const fileGroupRef = useRef();
 
-  const labelNodes = useMemo(() => {
-    if (!nodes.length) return [];
-    const filtered = nodes.filter(
-      (n) => n.type === 'dir' || n.isDir || (n.depth && n.depth <= 3)
-    );
-    return filtered.slice(0, MAX_VISIBLE_LABELS);
+  // Separa os nós por tipo (Diretórios vs Arquivos)
+  const { dirLabelNodes, fileLabelNodes } = useMemo(() => {
+    if (!nodes.length) return { dirLabelNodes: [], fileLabelNodes: [] };
+
+    const dirs = [];
+    const files = [];
+
+    nodes.forEach((n) => {
+      const isDir = n.type === 'dir' || n.isDir;
+      if (isDir) dirs.push(n);
+      else files.push(n);
+    });
+
+    return {
+      dirLabelNodes: dirs.slice(0, 300),
+      fileLabelNodes: files.slice(0, 700),
+    };
   }, [nodes]);
 
-  // LOD a 60 FPS direto na GPU
+  // LOD Inteligente na GPU: Pastas visíveis de longe; Arquivos aparecem ao aproxima a câmera (distância < 650)
   useFrame((state) => {
-    if (!groupRef.current) return;
-    const distance = state.camera.position.distanceTo(centerVector);
-    const isVisible = distance < LOD_DISTANCE_THRESHOLD;
+    const cameraDist = state.camera.position.distanceTo(centerVector);
 
-    if (groupRef.current.visible !== isVisible) {
-      groupRef.current.visible = isVisible;
+    // 1. Rótulos de Pastas: Visíveis de longe (distância < 2500)
+    if (dirGroupRef.current) {
+      const isDirVisible = cameraDist < 2500;
+      if (dirGroupRef.current.visible !== isDirVisible) {
+        dirGroupRef.current.visible = isDirVisible;
+      }
+    }
+
+    // 2. Rótulos de Arquivos do Pilar: Visíveis somente em zoom-in (distância < 650)
+    if (fileGroupRef.current) {
+      const isFileVisible = cameraDist < 650;
+      if (fileGroupRef.current.visible !== isFileVisible) {
+        fileGroupRef.current.visible = isFileVisible;
+      }
     }
   });
 
-  if (!labelNodes.length) return null;
-
   return (
-    <group ref={groupRef}>
-      {labelNodes.map((node) => (
-        <LabelCard key={node.id} node={node} />
-      ))}
+    <group>
+      {/* Rótulos das Pastas (Âncoras da Cidade - Visíveis de Longe) */}
+      <group ref={dirGroupRef}>
+        {dirLabelNodes.map((node) => (
+          <LabelCard key={node.id} node={node} />
+        ))}
+      </group>
+
+      {/* Rótulos dos Arquivos (Aparecem ao aproximar no Pilar) */}
+      <group ref={fileGroupRef}>
+        {fileLabelNodes.map((node) => (
+          <LabelCard key={node.id} node={node} />
+        ))}
+      </group>
     </group>
   );
 }

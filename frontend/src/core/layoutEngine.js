@@ -131,67 +131,115 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
       const { folders, files } = parentGroups[parentId];
       
       // ==========================================
-      // A. LAYOUT DAS PASTAS
+      // A. LAYOUT DAS PASTAS (Ponto Doce Ajustado)
       // ==========================================
+      const totalFolderWeight = folders.reduce((sum, f) => sum + f.weight, 0);
+      let accumulatedWeight = 0;
+
       folders.forEach((node, index) => {
+        const midWeight = accumulatedWeight + node.weight / 2;
+        accumulatedWeight += node.weight;
+
         if (d === 1) {
-          // NÍVEL 1: Distribuição Igualitária 360° em Anel Perfeito
-          // Todos os módulos principais ocupam fatias iguais do anel, eliminando desequilíbrio do centro.
           const angle = (index / Math.max(1, folders.length)) * (Math.PI * 2);
-          
-          // O peso é usado exclusivamente para afastar suavemente as pastas mais densas.
-          const pushDistance = CONFIG.BASE_MODULE_RADIUS + Math.sqrt(node.weight) * 4.5;
-          
+
+          // Ponto Doce Nível 1: Base 80 + multiplicador 7
+          const pushDistance = 80 + Math.sqrt(node.weight) * 7;
+
           node.x = Math.cos(angle) * pushDistance;
           node.z = Math.sin(angle) * pushDistance;
-          node.y = parent.y + (index % 2 === 0 ? 25 : -25) + randomJitter(10); // Ondulação vertical suave
+          node.y = parent.y + (index % 2 === 0 ? 25 : -25) + randomJitter(10);
         } else {
-          // NÍVEIS 2+: Subúrbios Orgânicos Direcionais
-          const angleFromCenter = Math.atan2(parent.z || 0.1, parent.x || 0.1);
-          const maxSpread = 1.6;
-          
-          const proportion = folders.length > 1 ? (index / (folders.length - 1)) - 0.5 : 0;
-          const spreadAngle = angleFromCenter + (proportion * maxSpread);
-          
-          const pushDistance = 45 + Math.sqrt(node.weight) * 3 + Math.sqrt(parent.weight) * 1.5;
+          // NÍVEIS 2+: Subúrbios em Leque
+          const angleFromCenter = Math.atan2(parent.z, parent.x);
+          const maxSpread = Math.min(Math.PI * 1.2, 0.6 + folders.length * 0.15);
+          const proportion = totalFolderWeight > 0 ? midWeight / totalFolderWeight - 0.5 : 0;
+          const spreadAngle = angleFromCenter + proportion * maxSpread;
+
+          // Ponto Doce Níveis 2+: Base 45 + multiplicadores ajustados (5 e 8)
+          const pushDistance = 45 + Math.sqrt(parent.weight) * 5 + Math.sqrt(node.weight) * 8;
+
           node.x = parent.x + Math.cos(spreadAngle) * pushDistance;
           node.z = parent.z + Math.sin(spreadAngle) * pushDistance;
-          node.y = parent.y + randomJitter(15);
+
+          // Oscilação vertical moderada (30 / -30)
+          node.y = parent.y + (index % 2 === 0 ? 30 : -30) + randomJitter(15);
         }
       });
 
       // ==========================================
-      // B. LAYOUT DOS ARQUIVOS (Efeito Bouquet Achatado)
+      // B. LAYOUT DOS ARQUIVOS (Pilar de Dados / Data Column)
       // ==========================================
       const fileCount = files.length;
       if (fileCount > 0) {
-        const dynamicClusterRadius = 18 + Math.pow(fileCount, 0.6) * 3.5;
-        const isRoot = parent.depth === 0;
-        const outwardAngle = isRoot ? 0 : Math.atan2(parent.z, parent.x);
+        let filesPlaced = 0;
+        let currentRing = 1;
 
-        files.forEach((node) => {
-          let theta, phi;
+        while (filesPlaced < fileCount) {
+          // Quantidade de arquivos por andar (anel)
+          const filesInThisRing = Math.min(8, fileCount - filesPlaced);
 
-          if (isRoot) {
-            // Arquivos soltos na raiz formam uma nuvem esférica no centro
-            theta = Math.random() * 2 * Math.PI;
-            phi = Math.acos(2 * Math.random() - 1);
-          } else {
-            // Bouquet Orgânico: Nascem voltados para fora em leque de ~216°
-            const spreadArc = Math.PI * 1.2; 
-            theta = outwardAngle + (Math.random() - 0.5) * spreadArc;
-            // Mantém os arquivos no cinturão do equador da pasta (0.3 a 0.7 PI)
-            phi = (0.3 + 0.4 * Math.random()) * Math.PI;
+          // O raio é curto e fixo para ficar colado na pasta mãe
+          const ringRadius = 15;
+
+          for (let i = 0; i < filesInThisRing; i++) {
+            const node = files[filesPlaced + i];
+
+            // Espalha no círculo (360º)
+            const angle = (i / filesInThisRing) * (Math.PI * 2);
+
+            // X e Z ficam colados na pasta mãe
+            node.x = parent.x + Math.cos(angle) * ringRadius;
+            node.z = parent.z + Math.sin(angle) * ringRadius;
+
+            // EMPILHAMENTO VERTICAL (Eixo Y):
+            // Cada "currentRing" é um andar do prédio, subindo 12 unidades por vez
+            node.y = parent.y + 12 + currentRing * 12;
           }
-          
-          const r = dynamicClusterRadius * (0.5 + 0.5 * Math.random()); 
-          node.x = parent.x + r * Math.sin(phi) * Math.cos(theta);
-          node.y = parent.y + (r * Math.cos(phi)) * 0.65; // Achatamento do disco em Y
-          node.z = parent.z + r * Math.sin(phi) * Math.sin(theta);
-        });
+
+          filesPlaced += filesInThisRing;
+          currentRing++;
+        }
       }
     });
   }
 
-  return { nodes: Array.from(nodeMap.values()), links: links };
+  // === CÁLCULO DA BOUNDING BOX E MÉTRICAS ESPACIAIS DINÂMICAS ===
+  let minY = Infinity;
+  let maxRadius = 0;
+
+  nodeMap.forEach((node) => {
+    if (typeof node.y === 'number' && node.y < minY) {
+      minY = node.y;
+    }
+    // Distância radial no plano XZ a partir da origem (0,0)
+    const r = Math.hypot(node.x || 0, node.z || 0);
+    if (r > maxRadius) {
+      maxRadius = r;
+    }
+  });
+
+  if (!isFinite(minY)) minY = 0;
+  if (maxRadius < 100) maxRadius = 150;
+
+  // Tamanho do chão proporcional ao nó mais distante + folga de respiro (+ 40%)
+  const gridRadius = Math.ceil(maxRadius * 2.8);
+  
+  // Limite dinâmico da câmera e nevoeiro proporcional ao tamanho real da galáxia carregada
+  const fogStart = Math.ceil(maxRadius * 1.5);
+  const fogEnd = Math.ceil(maxRadius * 3.5);
+  const maxCameraDistance = Math.ceil(maxRadius * 3.2);
+
+  return {
+    nodes: Array.from(nodeMap.values()),
+    links: links,
+    layoutInfo: {
+      minY,
+      maxRadius,
+      gridRadius,
+      fogStart,
+      fogEnd,
+      maxCameraDistance,
+    },
+  };
 }

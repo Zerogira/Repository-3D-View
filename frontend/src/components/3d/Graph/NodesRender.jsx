@@ -21,10 +21,11 @@ export default function NodesRender({ nodes = [] }) {
   const fileMeshRef = useRef();
 
   useLayoutEffect(() => {
-    // 1. Atualiza Instâncias de Diretórios (Pastas = Cubos Neon Ciano)
+    // 1. Atualiza Instâncias de Diretórios (Pastas = Cubos Neon Ciano de Destaque)
     if (dirMeshRef.current && dirNodes.length > 0) {
       dirNodes.forEach((node, i) => {
-        const scale = 3.2 + (Math.max(0, 5 - (node.depth || 0)) * 0.4);
+        // Escala aumentada (5.5 a 7.5) para atuar como âncoras visuais dos pilares
+        const scale = 5.5 + Math.max(0, 4 - (node.depth || 0)) * 0.5;
         tempObject.position.set(node.x || 0, node.y || 0, node.z || 0);
         tempObject.scale.set(scale, scale, scale);
         tempObject.updateMatrix();
@@ -37,10 +38,10 @@ export default function NodesRender({ nodes = [] }) {
       if (dirMeshRef.current.instanceColor) dirMeshRef.current.instanceColor.needsUpdate = true;
     }
 
-    // 2. Atualiza Instâncias de Arquivos (Esferas Neon com Brilho Intensificado)
+    // 2. Atualiza Instâncias de Arquivos (Esferas Menores 1.5)
     if (fileMeshRef.current && fileNodes.length > 0) {
       fileNodes.forEach((node, i) => {
-        const scale = 2.2;
+        const scale = 1.5;
         tempObject.position.set(node.x || 0, node.y || 0, node.z || 0);
         tempObject.scale.set(scale, scale, scale);
         tempObject.updateMatrix();
@@ -70,7 +71,7 @@ export default function NodesRender({ nodes = [] }) {
 
   return (
     <group>
-      {/* 1. InstancedMesh para Diretórios (Cubos Neon Ciano) */}
+      {/* 1. InstancedMesh para Diretórios (Cubos Foscos Ciano) */}
       {dirNodes.length > 0 && (
         <instancedMesh
           ref={dirMeshRef}
@@ -81,16 +82,16 @@ export default function NodesRender({ nodes = [] }) {
         >
           <boxGeometry args={[2.6, 2.6, 2.6]} />
           <meshStandardMaterial
-            emissive="#1e293b"
-            emissiveIntensity={0.6}
-            roughness={0.2}
-            metalness={0.6}
+            emissive="#000000"
+            emissiveIntensity={0}
+            roughness={0.7}
+            metalness={0}
             toneMapped={false}
           />
         </instancedMesh>
       )}
 
-      {/* 2. InstancedMesh para Arquivos (Esferas com Glow Emissivo) */}
+      {/* 2. InstancedMesh para Arquivos (Esferas com Cores Foscas e Vibrantes) */}
       {fileNodes.length > 0 && (
         <instancedMesh
           ref={fileMeshRef}
@@ -101,10 +102,10 @@ export default function NodesRender({ nodes = [] }) {
         >
           <sphereGeometry args={[2.0, 24, 24]} />
           <meshStandardMaterial
-            emissive="#334155"
-            emissiveIntensity={0.8}
-            roughness={0.15}
-            metalness={0.4}
+            emissive="#000000"
+            emissiveIntensity={0}
+            roughness={0.7}
+            metalness={0}
             toneMapped={false}
           />
         </instancedMesh>
