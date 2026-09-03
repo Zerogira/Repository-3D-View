@@ -20,6 +20,7 @@
     "react-dom": "^18.3.1",
     "react-force-graph-2d": "^1.25.4",
     "react-force-graph-3d": "^1.24.2",
+    "react-syntax-highlighter": "^16.1.1",
     "tailwind-merge": "^2.3.0",
     "three": "^0.169.0",
     "zustand": "^5.0.15"

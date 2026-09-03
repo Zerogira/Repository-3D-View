@@ -30,10 +30,21 @@ export const useAppStore = create((set) => ({
   selectedNode: null,
   setSelectedNode: (node) => set({ selectedNode: node }),
 
+  // Nó em hover no grafo (reação física de escala e glow)
+  hoveredNode: null,
+  setHoveredNode: (node) => set({ hoveredNode: node }),
+
   // Estado da Barra Lateral (inicia aberta por padrão)
   isSidebarOpen: true,
   setIsSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
   toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+
+  // Predefinição de Layout 3D Ativo ('classic' = Galaxy Clássico | 'universe' = Universo / Órbitas)
+  layoutMode: 'classic',
+  setLayoutMode: (mode) => set({ layoutMode: mode, activeLayout: mode }),
+  // Alias de compatibilidade
+  activeLayout: 'classic',
+  setActiveLayout: (mode) => set({ layoutMode: mode, activeLayout: mode }),
 
   // Toggles de Recursos Visuais 3D
   showEdges: true,
@@ -43,6 +54,14 @@ export const useAppStore = create((set) => ({
   showLabels: true,
   setShowLabels: (show) => set({ showLabels: show }),
   toggleShowLabels: () => set((state) => ({ showLabels: !state.showLabels })),
+
+  showFolderLabels: true,
+  setShowFolderLabels: (show) => set({ showFolderLabels: show }),
+  toggleShowFolderLabels: () => set((state) => ({ showFolderLabels: !state.showFolderLabels })),
+
+  showFileLabels: true,
+  setShowFileLabels: (show) => set({ showFileLabels: show }),
+  toggleShowFileLabels: () => set((state) => ({ showFileLabels: !state.showFileLabels })),
 
   showGizmo: true,
   setShowGizmo: (show) => set({ showGizmo: show }),
@@ -60,6 +79,10 @@ export const useAppStore = create((set) => ({
   autoRotate: true,
   setAutoRotate: (auto) => set({ autoRotate: auto }),
   toggleAutoRotate: () => set((state) => ({ autoRotate: !state.autoRotate })),
+
+  // Estado de Navegação/Interação da Câmera (Hide-on-Pan para 60 FPS amanteigados)
+  isMovingCamera: false,
+  setIsMovingCamera: (isMoving) => set({ isMovingCamera: isMoving }),
 
   // Estado do Web Worker / Carregamento do Grafo
   isLoadingGraph: false,

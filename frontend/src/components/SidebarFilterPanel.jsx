@@ -13,6 +13,10 @@ import {
   ChevronRight,
   Sparkles,
   RotateCw,
+  Folder,
+  FileText,
+  Orbit,
+  Globe,
 } from 'lucide-react';
 import { useAppStore } from '../core/store';
 import { CATEGORIES } from '../core/layoutEngine';
@@ -40,6 +44,12 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
   const showLabels = useAppStore((s) => s.showLabels);
   const toggleShowLabels = useAppStore((s) => s.toggleShowLabels);
 
+  const showFolderLabels = useAppStore((s) => s.showFolderLabels);
+  const toggleShowFolderLabels = useAppStore((s) => s.toggleShowFolderLabels);
+
+  const showFileLabels = useAppStore((s) => s.showFileLabels);
+  const toggleShowFileLabels = useAppStore((s) => s.toggleShowFileLabels);
+
   const showGizmo = useAppStore((s) => s.showGizmo);
   const toggleShowGizmo = useAppStore((s) => s.toggleShowGizmo);
 
@@ -51,6 +61,9 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
 
   const autoRotate = useAppStore((s) => s.autoRotate);
   const toggleAutoRotate = useAppStore((s) => s.toggleAutoRotate);
+
+  const layoutMode = useAppStore((s) => s.layoutMode);
+  const setLayoutMode = useAppStore((s) => s.setLayoutMode);
 
   // Calcula a quantidade de nós por categoria funcional
   const categoryCounts = React.useMemo(() => {
@@ -145,8 +158,43 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
         </div>
 
         {/* Seção 2: Controles Visuais 3D */}
-        <div className="border-t border-slate-800/80 pt-3 space-y-2">
-          <span className="text-xs font-semibold text-slate-400 block mb-1">
+        <div className="border-t border-slate-800/80 pt-3 space-y-2.5">
+          <div>
+            <span className="text-xs font-semibold text-slate-400 block mb-1.5">
+              Predefinição de Layout 3D
+            </span>
+            <div className="grid grid-cols-2 gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setLayoutMode('classic')}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  layoutMode === 'classic'
+                    ? 'bg-cyan-950 border border-cyan-500/50 text-cyan-300 shadow-neon-cyan-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Layout Cilíndrico / Pilares Verticais"
+              >
+                <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Galaxy Clássico</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setLayoutMode('universe')}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  layoutMode === 'universe'
+                    ? 'bg-fuchsia-950 border border-fuchsia-500/50 text-fuchsia-300 shadow-neon-pink-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Layout Cósmico com Órbitas Planetárias"
+              >
+                <Orbit className="w-3.5 h-3.5 text-fuchsia-400" />
+                <span>Universo (Órbitas)</span>
+              </button>
+            </div>
+          </div>
+
+          <span className="text-xs font-semibold text-slate-400 block pt-1">
             Recursos da Cena 3D
           </span>
 
@@ -168,21 +216,39 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
             </span>
           </button>
 
-          {/* Toggle Cards de Rótulos */}
+          {/* Toggle Nomes das Pastas */}
           <button
-            onClick={toggleShowLabels}
+            onClick={toggleShowFolderLabels}
             className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between border transition-all cursor-pointer ${
-              showLabels
-                ? 'bg-purple-950/40 border-purple-500/40 text-purple-300'
+              showFolderLabels
+                ? 'bg-cyan-950/40 border-cyan-500/40 text-cyan-300'
                 : 'bg-slate-900/50 border-slate-800 text-slate-500 hover:text-slate-300'
             }`}
           >
             <div className="flex items-center gap-2">
-              {showLabels ? <Eye className="w-3.5 h-3.5 text-purple-400" /> : <EyeOff className="w-3.5 h-3.5" />}
-              <span>Cards de Nomes</span>
+              <Folder className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Nomes das Pastas</span>
             </div>
             <span className="text-[10px] font-bold uppercase">
-              {showLabels ? 'ON' : 'OFF'}
+              {showFolderLabels ? 'ON' : 'OFF'}
+            </span>
+          </button>
+
+          {/* Toggle Nomes dos Arquivos */}
+          <button
+            onClick={toggleShowFileLabels}
+            className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between border transition-all cursor-pointer ${
+              showFileLabels
+                ? 'bg-pink-950/40 border-pink-500/40 text-pink-300'
+                : 'bg-slate-900/50 border-slate-800 text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <FileText className="w-3.5 h-3.5 text-pink-400" />
+              <span>Nomes dos Arquivos</span>
+            </div>
+            <span className="text-[10px] font-bold uppercase">
+              {showFileLabels ? 'ON' : 'OFF'}
             </span>
           </button>
 

@@ -1,4 +1,5 @@
-import React, { useRef, useLayoutEffect, useMemo } from 'react';
+import React, { useRef, useLayoutEffect, useMemo, useState, useCallback, useEffect } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useAppStore } from '../../../core/store';
 
@@ -8,10 +9,15 @@ const tempColor = new THREE.Color();
 /**
  * src/components/3d/Graph/NodesRender.jsx
  * 
- * Renderizador de nós 3D via InstancedMesh com efeito de brilho emissivo (Tree of Knowledge spec).
+ * Renderizador de alta performance via InstancedMesh com bolinhas sólidas, cores vivas e maiores:
+ * - Pastas: Bolinhas esféricas sólidas grandes e vibrantes (ciano elétrico #00f0ff)
+ * - Arquivos: Bolinhas esféricas sólidas ampliadas com cores vivas e ricas por categoria
+ * - Mantém rigorosamente as distâncias espaciais originais da árvore/física
+ * - Efeito de Hover Físico: Pulso de escala (+30%) com iluminação laser nítida
  */
 export default function NodesRender({ nodes = [] }) {
   const setSelectedNode = useAppStore((s) => s.setSelectedNode);
+  const setHoveredNode = useAppStore((s) => s.setHoveredNode);
 
   // Separa nós por tipo (diretórios vs arquivos)
   const dirNodes = useMemo(() => nodes.filter((n) => n.type === 'dir' || n.isDir), [nodes]);
@@ -20,41 +26,140 @@ export default function NodesRender({ nodes = [] }) {
   const dirMeshRef = useRef();
   const fileMeshRef = useRef();
 
-  useLayoutEffect(() => {
-    // 1. Atualiza Instâncias de Diretórios (Pastas = Cubos Neon Ciano de Destaque)
-    if (dirMeshRef.current && dirNodes.length > 0) {
-      dirNodes.forEach((node, i) => {
-        // Escala aumentada (5.5 a 7.5) para atuar como âncoras visuais dos pilares
-        const scale = 5.5 + Math.max(0, 4 - (node.depth || 0)) * 0.5;
-        tempObject.position.set(node.x || 0, node.y || 0, node.z || 0);
-        tempObject.scale.set(scale, scale, scale);
-        tempObject.updateMatrix();
+  // Índice do nó atualmente sob o ponteiro do mouse
+  const [hoveredState, setHoveredState] = useState({ type: null, index: -1 });
 
-        dirMeshRef.current.setMatrixAt(i, tempObject.matrix);
-        tempColor.set(node.color || '#22d3ee');
-        dirMeshRef.current.setColorAt(i, tempColor);
-      });
-      dirMeshRef.current.instanceMatrix.needsUpdate = true;
-      if (dirMeshRef.current.instanceColor) dirMeshRef.current.instanceColor.needsUpdate = true;
+  // Guarda as posições interpoladas atuais (Voo Cósmico / Transição Suave)
+  const dirPositionsRef = useRef([]);
+  const filePositionsRef = useRef([]);
+
+  // Inicializa ou atualiza as posições de destino quando o array de nós muda
+  useEffect(() => {
+    // Alinha o buffer de posições interpoladas para diretórios
+    if (dirPositionsRef.current.length !== dirNodes.length) {
+      dirPositionsRef.current = dirNodes.map((n) => ({
+        x: n.x || 0,
+        y: n.y || 0,
+        z: n.z || 0,
+      }));
     }
 
-    // 2. Atualiza Instâncias de Arquivos (Esferas Menores 1.5)
-    if (fileMeshRef.current && fileNodes.length > 0) {
-      fileNodes.forEach((node, i) => {
-        const scale = 1.5;
-        tempObject.position.set(node.x || 0, node.y || 0, node.z || 0);
-        tempObject.scale.set(scale, scale, scale);
-        tempObject.updateMatrix();
-
-        fileMeshRef.current.setMatrixAt(i, tempObject.matrix);
-        tempColor.set(node.color || '#f472b6');
-        fileMeshRef.current.setColorAt(i, tempColor);
-      });
-      fileMeshRef.current.instanceMatrix.needsUpdate = true;
-      if (fileMeshRef.current.instanceColor) fileMeshRef.current.instanceColor.needsUpdate = true;
+    // Alinha o buffer de posições interpoladas para arquivos
+    if (filePositionsRef.current.length !== fileNodes.length) {
+      filePositionsRef.current = fileNodes.map((n) => ({
+        x: n.x || 0,
+        y: n.y || 0,
+        z: n.z || 0,
+      }));
     }
   }, [dirNodes, fileNodes]);
 
+  // Loop de Animação 60 FPS: Interpola suavemente (lerp) as posições no espaço 3D (Voo entre layouts)
+  useFrame((_, delta) => {
+    // Fator de suavização do voo adaptado ao framerate
+    const lerpFactor = Math.min(1, delta * 6.5);
+    let dirNeedsUpdate = false;
+    let fileNeedsUpdate = false;
+
+    // 1. Interpolação de Diretórios
+    if (dirMeshRef.current && dirNodes.length > 0) {
+      for (let i = 0; i < dirNodes.length; i++) {
+        const target = dirNodes[i];
+        const current = dirPositionsRef.current[i] || { x: target.x || 0, y: target.y || 0, z: target.z || 0 };
+        dirPositionsRef.current[i] = current;
+
+        const tx = target.x || 0;
+        const ty = target.y || 0;
+        const tz = target.z || 0;
+
+        const dx = tx - current.x;
+        const dy = ty - current.y;
+        const dz = tz - current.z;
+
+        if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05 || Math.abs(dz) > 0.05) {
+          current.x += dx * lerpFactor;
+          current.y += dy * lerpFactor;
+          current.z += dz * lerpFactor;
+          dirNeedsUpdate = true;
+        } else {
+          current.x = tx;
+          current.y = ty;
+          current.z = tz;
+        }
+
+        const isHovered = hoveredState.type === 'dir' && hoveredState.index === i;
+        const baseScale = 7.5 + Math.max(0, 4 - (target.depth || 0)) * 0.75;
+        const scale = isHovered ? baseScale * 1.3 : baseScale;
+
+        tempObject.position.set(current.x, current.y, current.z);
+        tempObject.scale.set(scale, scale, scale);
+        tempObject.rotation.set(0, 0, 0);
+        tempObject.updateMatrix();
+
+        dirMeshRef.current.setMatrixAt(i, tempObject.matrix);
+
+        const baseColor = target.color || '#00f0ff';
+        const colorHex = isHovered ? '#ffffff' : baseColor;
+        tempColor.set(colorHex);
+        dirMeshRef.current.setColorAt(i, tempColor);
+      }
+
+      if (dirNeedsUpdate || hoveredState.type === 'dir') {
+        dirMeshRef.current.instanceMatrix.needsUpdate = true;
+        if (dirMeshRef.current.instanceColor) dirMeshRef.current.instanceColor.needsUpdate = true;
+      }
+    }
+
+    // 2. Interpolação de Arquivos (Voo Suave para as Órbitas Planetárias)
+    if (fileMeshRef.current && fileNodes.length > 0) {
+      for (let i = 0; i < fileNodes.length; i++) {
+        const target = fileNodes[i];
+        const current = filePositionsRef.current[i] || { x: target.x || 0, y: target.y || 0, z: target.z || 0 };
+        filePositionsRef.current[i] = current;
+
+        const tx = target.x || 0;
+        const ty = target.y || 0;
+        const tz = target.z || 0;
+
+        const dx = tx - current.x;
+        const dy = ty - current.y;
+        const dz = tz - current.z;
+
+        if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05 || Math.abs(dz) > 0.05) {
+          current.x += dx * lerpFactor;
+          current.y += dy * lerpFactor;
+          current.z += dz * lerpFactor;
+          fileNeedsUpdate = true;
+        } else {
+          current.x = tx;
+          current.y = ty;
+          current.z = tz;
+        }
+
+        const isHovered = hoveredState.type === 'file' && hoveredState.index === i;
+        const scale = isHovered ? 4.2 : 3.2;
+
+        tempObject.position.set(current.x, current.y, current.z);
+        tempObject.scale.set(scale, scale, scale);
+        tempObject.rotation.set(0, 0, 0);
+        tempObject.updateMatrix();
+
+        fileMeshRef.current.setMatrixAt(i, tempObject.matrix);
+
+        const baseColor = target.color || '#f43f5e';
+        const colorHex = isHovered ? '#ffffff' : baseColor;
+        tempColor.set(colorHex);
+        fileMeshRef.current.setColorAt(i, tempColor);
+      }
+
+      if (fileNeedsUpdate || hoveredState.type === 'file') {
+        fileMeshRef.current.instanceMatrix.needsUpdate = true;
+        if (fileMeshRef.current.instanceColor) fileMeshRef.current.instanceColor.needsUpdate = true;
+      }
+    }
+  });
+
+  // Handlers de clique
   const handleDirClick = (e) => {
     e.stopPropagation();
     if (e.instanceId !== undefined && dirNodes[e.instanceId]) {
@@ -69,43 +174,75 @@ export default function NodesRender({ nodes = [] }) {
     }
   };
 
+  // Handlers de Hover para Pastas
+  const handleDirPointerOver = useCallback(
+    (e) => {
+      e.stopPropagation();
+      const id = e.instanceId;
+      if (id !== undefined && dirNodes[id]) {
+        document.body.style.cursor = 'pointer';
+        setHoveredState({ type: 'dir', index: id });
+        setHoveredNode(dirNodes[id]);
+      }
+    },
+    [dirNodes, setHoveredNode]
+  );
+
+  const handleDirPointerOut = useCallback(() => {
+    document.body.style.cursor = 'auto';
+    setHoveredState({ type: null, index: -1 });
+    setHoveredNode(null);
+  }, [setHoveredNode]);
+
+  // Handlers de Hover para Arquivos
+  const handleFilePointerOver = useCallback(
+    (e) => {
+      e.stopPropagation();
+      const id = e.instanceId;
+      if (id !== undefined && fileNodes[id]) {
+        document.body.style.cursor = 'pointer';
+        setHoveredState({ type: 'file', index: id });
+        setHoveredNode(fileNodes[id]);
+      }
+    },
+    [fileNodes, setHoveredNode]
+  );
+
+  const handleFilePointerOut = useCallback(() => {
+    document.body.style.cursor = 'auto';
+    setHoveredState({ type: null, index: -1 });
+    setHoveredNode(null);
+  }, [setHoveredNode]);
+
   return (
     <group>
-      {/* 1. InstancedMesh para Diretórios (Cubos Foscos Ciano) */}
+      {/* 1. InstancedMesh para Diretórios (Bolinhas Sólidas Grandes Ciano Elétrico) */}
       {dirNodes.length > 0 && (
         <instancedMesh
           ref={dirMeshRef}
           args={[null, null, dirNodes.length]}
           onClick={handleDirClick}
-          castShadow
-          receiveShadow
+          onPointerOver={handleDirPointerOver}
+          onPointerOut={handleDirPointerOut}
         >
-          <boxGeometry args={[2.6, 2.6, 2.6]} />
-          <meshStandardMaterial
-            emissive="#000000"
-            emissiveIntensity={0}
-            roughness={0.7}
-            metalness={0}
+          <sphereGeometry args={[2.0, 24, 24]} />
+          <meshBasicMaterial
             toneMapped={false}
           />
         </instancedMesh>
       )}
 
-      {/* 2. InstancedMesh para Arquivos (Esferas com Cores Foscas e Vibrantes) */}
+      {/* 2. InstancedMesh para Arquivos (Bolinhas Sólidas Maiores com Cores Vivas) */}
       {fileNodes.length > 0 && (
         <instancedMesh
           ref={fileMeshRef}
           args={[null, null, fileNodes.length]}
           onClick={handleFileClick}
-          castShadow
-          receiveShadow
+          onPointerOver={handleFilePointerOver}
+          onPointerOut={handleFilePointerOut}
         >
-          <sphereGeometry args={[2.0, 24, 24]} />
-          <meshStandardMaterial
-            emissive="#000000"
-            emissiveIntensity={0}
-            roughness={0.7}
-            metalness={0}
+          <sphereGeometry args={[1.5, 20, 20]} />
+          <meshBasicMaterial
             toneMapped={false}
           />
         </instancedMesh>

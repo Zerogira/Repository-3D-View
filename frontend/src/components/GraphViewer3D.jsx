@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Canvas } from '@react-three/fiber';
-import { Maximize2, Minimize2 } from 'lucide-react';
 import SceneSetup from './3d/Environment/SceneSetup';
 import GraphRenderer from './3d/Graph/GraphRenderer';
 import SidebarFilterPanel from './SidebarFilterPanel';
 import MiniMap from './MiniMap';
 import { useAppStore } from '../core/store';
-import { computeCylindricalLayout } from '../core/layoutEngine';
+import { computeCylindricalLayout, computeUniverseLayout } from '../core/layoutEngine';
 
 /**
  * src/components/GraphViewer3D.jsx
@@ -33,6 +32,9 @@ export default function GraphViewer3D({
 
   const activeCategories = useAppStore((s) => s.activeCategories);
   const setSelectedNode = useAppStore((s) => s.setSelectedNode);
+  const setShowFileLabels = useAppStore((s) => s.setShowFileLabels);
+  const showStats = useAppStore((s) => s.showStats);
+  const layoutMode = useAppStore((s) => s.layoutMode);
   const workerRef = useRef(null);
 
   // Instanciação e controle do Web Worker
@@ -40,6 +42,13 @@ export default function GraphViewer3D({
     if (!graphData || !Array.isArray(graphData.nodes) || graphData.nodes.length === 0) {
       setCalculatedData({ nodes: [], links: [] });
       return;
+    }
+
+    // Regra Inteligente de Performance: Se o repositório for massivo (>500 nós/arquivos),
+    // inicia com os nomes de arquivos OFF por padrão para manter 60 FPS garantidos.
+    const fileCount = graphData.nodes.filter((n) => n.type !== 'dir' && !n.isDir).length;
+    if (fileCount > 500) {
+      setShowFileLabels(false);
     }
 
     setIsProcessingLayout(true);
@@ -58,7 +67,8 @@ export default function GraphViewer3D({
           setCalculatedData(payload);
         } else if (type === 'ERROR') {
           console.warn('Web Worker reportou erro, fallback para Main Thread:', error);
-          const fallbackData = computeCylindricalLayout(graphData.nodes, graphData.links || []);
+          const fallbackFn = layoutMode === 'universe' ? computeUniverseLayout : computeCylindricalLayout;
+          const fallbackData = fallbackFn(graphData.nodes, graphData.links || []);
           setCalculatedData(fallbackData);
         }
         setIsProcessingLayout(false);
@@ -66,7 +76,8 @@ export default function GraphViewer3D({
 
       worker.onerror = (err) => {
         console.warn('Erro no Web Worker, fallback para Main Thread:', err);
-        const fallbackData = computeCylindricalLayout(graphData.nodes, graphData.links || []);
+        const fallbackFn = layoutMode === 'universe' ? computeUniverseLayout : computeCylindricalLayout;
+        const fallbackData = fallbackFn(graphData.nodes, graphData.links || []);
         setCalculatedData(fallbackData);
         setIsProcessingLayout(false);
       };
@@ -74,6 +85,7 @@ export default function GraphViewer3D({
       worker.postMessage({
         nodes: graphData.nodes,
         links: graphData.links || graphData.hierarchyLinks || [],
+        layout: layoutMode,
       });
 
       return () => {
@@ -81,22 +93,73 @@ export default function GraphViewer3D({
       };
     } catch (err) {
       console.warn('Falha ao criar Web Worker, executando na Main Thread:', err);
-      const fallbackData = computeCylindricalLayout(graphData.nodes, graphData.links || []);
+      const fallbackFn = layoutMode === 'universe' ? computeUniverseLayout : computeCylindricalLayout;
+      const fallbackData = fallbackFn(graphData.nodes, graphData.links || []);
       setCalculatedData(fallbackData);
       setIsProcessingLayout(false);
     }
-  }, [graphData]);
+  }, [graphData, layoutMode]);
+
+  const containerRef = useRef(null);
+  const [isNativeFullScreen, setIsNativeFullScreen] = useState(false);
+
+  // Sincroniza com eventos nativos do navegador (F11, ESC ou API requestFullscreen)
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      const isFull = Boolean(document.fullscreenElement);
+      setIsNativeFullScreen(isFull);
+      if (!isFull && isFullScreen && onToggleFullScreen) {
+        onToggleFullScreen();
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullScreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullScreenChange);
+    };
+  }, [isFullScreen, onToggleFullScreen]);
+
+  // Função para Alternar Tela Cheia Verdadeira no Monitor
+  const handleToggleTrueFullScreen = () => {
+    if (!document.fullscreenElement) {
+      if (containerRef.current?.requestFullscreen) {
+        containerRef.current.requestFullscreen().catch(() => {});
+      } else if (containerRef.current?.webkitRequestFullscreen) {
+        containerRef.current.webkitRequestFullscreen();
+      }
+      if (onToggleFullScreen && !isFullScreen) {
+        onToggleFullScreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+      if (onToggleFullScreen && isFullScreen) {
+        onToggleFullScreen();
+      }
+    }
+  };
 
   // Tecla ESC para sair do modo Tela Cheia
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isFullScreen && onToggleFullScreen) {
-        onToggleFullScreen();
+      if (e.key === 'Escape' && (isFullScreen || isNativeFullScreen)) {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+        if (isFullScreen && onToggleFullScreen) {
+          onToggleFullScreen();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullScreen, onToggleFullScreen]);
+  }, [isFullScreen, isNativeFullScreen, onToggleFullScreen]);
 
   // Filtro de Busca em Tempo Real e Categorias Funcionais
   const filteredNodes = useMemo(() => {
@@ -123,40 +186,20 @@ export default function GraphViewer3D({
     return result;
   }, [calculatedData.nodes, filterTerm, activeCategories]);
 
+  const isActuallyFull = isFullScreen || isNativeFullScreen;
+
   // Conteúdo Principal da Viewport 3D
   const content = (
     <div
+      ref={containerRef}
       className={`w-full h-full bg-[#070a12] flex flex-col ${
-        isFullScreen
+        isActuallyFull
           ? 'fixed inset-0 z-[99999] w-screen h-screen overflow-hidden'
           : 'relative overflow-hidden rounded-2xl border border-slate-800'
       }`}
     >
       {/* Painel de Controle e Filtros Lateral Esquerdo Retrátil */}
       <SidebarFilterPanel nodeCount={filteredNodes.length} nodes={calculatedData.nodes} />
-
-      {/* Botões de Ação no Topo Direito (Full Screen Toggle) */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-        {onToggleFullScreen && (
-          <button
-            onClick={onToggleFullScreen}
-            className="p-2.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded-xl transition-all shadow-xl backdrop-blur-md cursor-pointer flex items-center gap-2 text-xs font-bold"
-            title={isFullScreen ? 'Sair da Tela Cheia (ESC)' : 'Modo Galaxy Tela Cheia'}
-          >
-            {isFullScreen ? (
-              <>
-                <Minimize2 className="w-4 h-4 text-pink-400" />
-                <span>Sair da Tela Cheia</span>
-              </>
-            ) : (
-              <>
-                <Maximize2 className="w-4 h-4 text-cyan-400" />
-                <span>Tela Cheia</span>
-              </>
-            )}
-          </button>
-        )}
-      </div>
 
       {/* Overlay de Processamento do Web Worker */}
       {isProcessingLayout ? (
@@ -194,19 +237,23 @@ export default function GraphViewer3D({
             maxCameraDistance={calculatedData.layoutInfo?.maxCameraDistance || 650}
           />
 
-          {/* Atores 3D: GraphRenderer com InstancedMesh, LineSegments 1 Draw Call e WebGL Text LOD */}
-          <GraphRenderer nodes={filteredNodes} links={calculatedData.links} />
+          {/* Atores 3D: GraphRenderer com InstancedMesh, LineSegments 1 Draw Call, OrbitRings e WebGL Text LOD */}
+          <GraphRenderer
+            nodes={filteredNodes}
+            links={calculatedData.links}
+            orbitRings={calculatedData.orbitRings || []}
+          />
         </Canvas>
       </div>
 
-      {/* MiniMapa Tático Flutuante no Canto Inferior Esquerdo */}
-      <div className="absolute bottom-4 left-4 z-20">
+      {/* MiniMapa Tático Flutuante no Extremo Canto Inferior Direito (bottom-4 right-4) */}
+      <div className="absolute bottom-4 right-4 z-20 pointer-events-auto">
         <MiniMap nodes={filteredNodes} links={calculatedData.links} />
       </div>
     </div>
   );
 
-  if (isFullScreen) {
+  if (isActuallyFull) {
     return createPortal(content, document.body);
   }
 

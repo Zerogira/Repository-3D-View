@@ -7,8 +7,11 @@ import GraphViewer3D from './components/GraphViewer3D';
 import GraphViewer2D from './components/GraphViewer2D';
 import SidebarStats from './components/SidebarStats';
 import NodeDetailsModal from './components/NodeDetailsModal';
+import CodeViewerPanel from './components/CodeViewerPanel';
 import TokenModal from './components/TokenModal';
+import BackgroundSwitcher from './components/backgrounds/BackgroundSwitcher';
 import { fetchRepositoryGraph } from './services/api';
+import { useAppStore } from './core/store';
 
 export default function App() {
   const [viewMode, setViewMode] = useState('3D'); // '3D' | '2D'
@@ -22,11 +25,37 @@ export default function App() {
   // Histórico de Repositórios Recentes
   const [recentRepos, setRecentRepos] = useState([]);
 
-  // Full screen 3D state
+  // Full screen state
   const [is3DFullScreen, setIs3DFullScreen] = useState(false);
 
-  // Selected Node state
-  const [selectedNode, setSelectedNode] = useState(null);
+  // Alterna tela cheia verdadeira no monitor via Fullscreen API nativo
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIs3DFullScreen(true);
+      }).catch(() => {
+        setIs3DFullScreen((prev) => !prev);
+      });
+    } else {
+      document.exitFullscreen().then(() => {
+        setIs3DFullScreen(false);
+      }).catch(() => {
+        setIs3DFullScreen(false);
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIs3DFullScreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  // Selected Node state (sincronizado com Zustand para os nós 3D/2D)
+  const selectedNode = useAppStore((s) => s.selectedNode);
+  const setSelectedNode = useAppStore((s) => s.setSelectedNode);
 
   // In-graph search filter
   const [filterTerm, setFilterTerm] = useState('');
@@ -112,11 +141,16 @@ export default function App() {
         onBackToHome={() => setCurrentView('HOME')}
         filterTerm={filterTerm}
         setFilterTerm={setFilterTerm}
+        isFullScreen={is3DFullScreen}
+        onToggleFullScreen={toggleFullScreen}
       />
 
       {/* ROTA 1: PÁGINA INICIAL (HOME) */}
       {currentView === 'HOME' ? (
-        <main className="flex-1 overflow-y-auto px-4 md:px-8 py-12 flex flex-col items-center justify-center space-y-8 max-w-4xl mx-auto w-full custom-scrollbar">
+        <main className="w-full h-screen min-h-screen overflow-y-auto px-4 md:px-8 flex flex-col items-center justify-center space-y-8 max-w-4xl mx-auto custom-scrollbar relative z-10 bg-transparent">
+          {/* Alternador de Backgrounds Dinâmicos (HackerGrid / CyberSpotlight / NetworkNodes) */}
+          <BackgroundSwitcher />
+
           {/* Hero Header */}
           <div className="text-center space-y-4 max-w-2xl">
             <motion.h1
@@ -125,7 +159,7 @@ export default function App() {
               className="text-4xl md:text-6xl font-extrabold tracking-tight"
             >
               Explore Repositórios em{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-400 to-purple-400 shadow-neon-cyan-sm">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-400 to-purple-400 drop-shadow-[0_0_20px_rgba(34,211,238,0.35)]">
                 Árvores 3D
               </span>
             </motion.h1>
@@ -207,7 +241,7 @@ export default function App() {
                   onNodeClick={(node) => setSelectedNode(node)}
                   filterTerm={filterTerm}
                   isFullScreen={is3DFullScreen}
-                  onToggleFullScreen={() => setIs3DFullScreen((prev) => !prev)}
+                  onToggleFullScreen={toggleFullScreen}
                 />
               ) : (
                 <GraphViewer2D
@@ -230,8 +264,8 @@ export default function App() {
         </main>
       )}
 
-      {/* Modal de Detalhes do Nó Clicado */}
-      <NodeDetailsModal
+      {/* Drawer Lateral Retrátil de Código-Fonte (Syntax Highlighter) */}
+      <CodeViewerPanel
         node={selectedNode}
         repoSlug={graphData?.repo}
         defaultBranch={graphData?.default_branch}

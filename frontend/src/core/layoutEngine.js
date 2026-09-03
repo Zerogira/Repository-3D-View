@@ -168,33 +168,31 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
       });
 
       // ==========================================
-      // B. LAYOUT DOS ARQUIVOS (Pilar de Dados / Data Column)
+      // B. LAYOUT DOS ARQUIVOS (Dispersão Dinâmica Proporcional ao Perímetro)
       // ==========================================
       const fileCount = files.length;
       if (fileCount > 0) {
+        // Dispersão Dinâmica: o raio expande com base na quantidade de filhos
+        // Perímetro necessário = fileCount * tamanhoDaBolinha / 1.5
+        const dynamicBaseRadius = Math.max(28, (fileCount * 3.2) / 1.5);
+        // Ajusta quantidade por andar dependendo do perímetro disponível
+        const filesPerFloor = Math.min(16, Math.max(8, Math.floor(dynamicBaseRadius / 3.5)));
+
         let filesPlaced = 0;
         let currentRing = 1;
 
         while (filesPlaced < fileCount) {
-          // Quantidade de arquivos por andar (anel)
-          const filesInThisRing = Math.min(8, fileCount - filesPlaced);
-
-          // O raio é curto e fixo para ficar colado na pasta mãe
-          const ringRadius = 15;
+          const filesInThisRing = Math.min(filesPerFloor, fileCount - filesPlaced);
+          // Pequena expansão radial nos andares superiores para formar cone cônico suave
+          const ringRadius = dynamicBaseRadius + (currentRing - 1) * 3;
 
           for (let i = 0; i < filesInThisRing; i++) {
             const node = files[filesPlaced + i];
-
-            // Espalha no círculo (360º)
             const angle = (i / filesInThisRing) * (Math.PI * 2);
 
-            // X e Z ficam colados na pasta mãe
             node.x = parent.x + Math.cos(angle) * ringRadius;
             node.z = parent.z + Math.sin(angle) * ringRadius;
-
-            // EMPILHAMENTO VERTICAL (Eixo Y):
-            // Cada "currentRing" é um andar do prédio, subindo 12 unidades por vez
-            node.y = parent.y + 12 + currentRing * 12;
+            node.y = parent.y + 24 + currentRing * 18;
           }
 
           filesPlaced += filesInThisRing;
@@ -233,6 +231,114 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
   return {
     nodes: Array.from(nodeMap.values()),
     links: links,
+    layoutInfo: {
+      minY,
+      maxRadius,
+      gridRadius,
+      fogStart,
+      fogEnd,
+      maxCameraDistance,
+    },
+  };
+}
+
+/**
+ * Predefinição 2: Layout Universe / Órbitas Planetárias
+ * 
+ * - Pastas atuam como Planetas/Estrelas principais distribuídos em sistemas estelares.
+ * - Arquivos orbitam suas pastas-mães em anéis concêntricos (Math.cos / Math.sin),
+ *   formando sistemas planetários e cinturões de asteroides/luas de código.
+ * - Fornece também uma lista de 'orbitRings' para desenhar as linhas de órbita (anéis torus/line).
+ */
+export function computeUniverseLayout(rawNodes, rawLinks) {
+  // Começamos calculando a estrutura básica e os centros das pastas
+  const baseLayout = computeCylindricalLayout(rawNodes, rawLinks);
+  const nodes = baseLayout.nodes;
+  const links = baseLayout.links;
+
+  if (!nodes.length) return baseLayout;
+
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  const folderNodes = nodes.filter((n) => n.isDir);
+  const orbitRings = [];
+
+  folderNodes.forEach((parent) => {
+    // Busca arquivos filhos diretos deste diretório
+    const files = (parent.children || [])
+      .map((id) => nodeMap.get(id))
+      .filter((n) => n && !n.isDir);
+
+    const fileCount = files.length;
+    if (fileCount === 0) return;
+
+    // Distribuição orbital com expansão dinâmica por perímetro
+    // Se a pasta tiver 100 arquivos, o raio se expande massivamente para dar respiro
+    const minOrbitRadius = Math.max(34, (fileCount * 3.2) / 1.5);
+    const ringSpacing = 20 + Math.min(15, fileCount * 0.15);
+
+    let filesPlaced = 0;
+    let r = 0;
+
+    while (filesPlaced < fileCount) {
+      const ringRadius = minOrbitRadius + r * ringSpacing;
+      // Quantidade de bolinhas suportadas neste anel proporcional à circunferência
+      const filesPerRing = Math.max(10, Math.floor((ringRadius * Math.PI * 2) / 24));
+      const countInThisRing = Math.min(filesPerRing, fileCount - filesPlaced);
+
+      orbitRings.push({
+        x: parent.x || 0,
+        y: parent.y || 0,
+        z: parent.z || 0,
+        radius: ringRadius,
+        color: parent.color || '#38bdf8',
+      });
+
+      // Inclinação suave do plano orbital individual de cada pasta para dar profundidade cósmica
+      const tiltX = ((parent.id.charCodeAt(0) || 0) % 5 - 2) * 0.08;
+      const tiltZ = ((parent.id.charCodeAt(parent.id.length - 1) || 0) % 5 - 2) * 0.08;
+
+      for (let i = 0; i < countInThisRing; i++) {
+        const fileNode = files[filesPlaced + i];
+        const angle = (i / countInThisRing) * (Math.PI * 2);
+
+        const localX = Math.cos(angle) * ringRadius;
+        const localZ = Math.sin(angle) * ringRadius;
+        const localY = localX * tiltX + localZ * tiltZ;
+
+        fileNode.x = (parent.x || 0) + localX;
+        fileNode.y = (parent.y || 0) + localY;
+        fileNode.z = (parent.z || 0) + localZ;
+        fileNode.orbitRadius = ringRadius;
+        fileNode.orbitAngle = angle;
+      }
+
+      filesPlaced += countInThisRing;
+      r++;
+    }
+  });
+
+  // Recalcula bounding box espacial e horizontes
+  let minY = Infinity;
+  let maxRadius = 0;
+
+  nodes.forEach((node) => {
+    if (typeof node.y === 'number' && node.y < minY) minY = node.y;
+    const r = Math.hypot(node.x || 0, node.z || 0);
+    if (r > maxRadius) maxRadius = r;
+  });
+
+  if (!isFinite(minY)) minY = 0;
+  if (maxRadius < 100) maxRadius = 150;
+
+  const gridRadius = Math.ceil(maxRadius * 2.8);
+  const fogStart = Math.ceil(maxRadius * 1.5);
+  const fogEnd = Math.ceil(maxRadius * 3.5);
+  const maxCameraDistance = Math.ceil(maxRadius * 3.2);
+
+  return {
+    nodes,
+    links,
+    orbitRings,
     layoutInfo: {
       minY,
       maxRadius,

@@ -56,26 +56,26 @@ export default function EdgesRender({ nodes = [], links = [] }) {
 
   return (
     <group>
-      {/* 1. Conexões de Infraestrutura: Pasta -> Pasta (Ciano Neon Brilhante 0.85) */}
+      {/* 1. Conexões de Infraestrutura: Pasta -> Pasta (Fios de Luz Brancos Translúcidos 0.35) */}
       {folderPositions.length > 0 && (
         <lineSegments geometry={folderGeometry}>
           <lineBasicMaterial
-            color="#38bdf8"
-            transparent
-            opacity={0.85}
-            linewidth={2}
+            color="#ffffff"
+            transparent={true}
+            opacity={0.35}
+            linewidth={1.5}
             depthWrite={false}
           />
         </lineSegments>
       )}
 
-      {/* 2. Conexões dos Pilares: Pasta -> Arquivo (Sutil, Transparente 0.25) */}
+      {/* 2. Conexões dos Pilares: Pasta -> Arquivo (Fios de Luz Brancos Sutis 0.22) */}
       {filePositions.length > 0 && (
         <lineSegments geometry={fileGeometry}>
           <lineBasicMaterial
-            color="#94a3b8"
-            transparent
-            opacity={0.25}
+            color="#ffffff"
+            transparent={true}
+            opacity={0.22}
             linewidth={1}
             depthWrite={false}
           />

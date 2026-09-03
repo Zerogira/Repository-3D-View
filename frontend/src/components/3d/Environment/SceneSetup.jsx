@@ -24,6 +24,7 @@ export default function SceneSetup({
   const showGizmo = useAppStore((s) => s.showGizmo);
   const showGrid = useAppStore((s) => s.showGrid);
   const autoRotate = useAppStore((s) => s.autoRotate);
+  const setIsMovingCamera = useAppStore((s) => s.setIsMovingCamera);
 
   return (
     <>
@@ -53,14 +54,19 @@ export default function SceneSetup({
         maxDistance={maxCameraDistance}
         autoRotate={autoRotate}
         autoRotateSpeed={0.8}
+        onStart={() => setIsMovingCamera(true)}
+        onEnd={() => setIsMovingCamera(false)}
       />
 
       {/* Painel de Métricas de Performance da GPU */}
       {showStats && <Stats className="react-three-stats" />}
 
-      {/* Bússola 3D de Orientação Tática (Norte/Sul/Leste/Oeste) */}
+      {/* Bússola 3D de Orientação Tática (Gizmo) posicionada ergonomicamente acima do minimapa */}
       {showGizmo && (
-        <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
+        <GizmoHelper
+          alignment="bottom-right"
+          margin={[80, 210]}
+        >
           <GizmoViewport
             axisColors={['#ef4444', '#10b981', '#3b82f6']}
             labelColor="#ffffff"

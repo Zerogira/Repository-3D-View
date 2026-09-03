@@ -1,11 +1,12 @@
 import React from 'react';
-import { Box, Key, ArrowLeft, GitBranch, Layers, BoxSelect, Filter } from 'lucide-react';
+import { Box, Key, ArrowLeft, GitBranch, Layers, BoxSelect, Filter, Maximize2, Minimize2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAppStore } from '../core/store';
 
 /**
  * src/components/Navbar.jsx
  * 
- * Header limpo com Toggle Segmentado 2D/3D no centro e Breadcrumbs à esquerda.
+ * Header limpo despoluído com Toggle Segmentado 2D/3D no centro e botão minimalista de Tela Cheia.
  */
 export default function Navbar({
   viewMode,
@@ -17,9 +18,17 @@ export default function Navbar({
   onBackToHome,
   filterTerm = '',
   setFilterTerm,
+  isFullScreen = false,
+  onToggleFullScreen,
 }) {
   return (
-    <header className="h-16 px-4 md:px-8 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 flex items-center justify-between z-40 shrink-0 select-none">
+    <header
+      className={`h-16 px-4 md:px-8 flex items-center justify-between z-40 select-none transition-all duration-300 ${
+        currentView === 'HOME'
+          ? 'absolute top-0 left-0 w-full bg-transparent border-b border-transparent'
+          : 'relative bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shrink-0'
+      }`}
+    >
       <div className="w-full max-w-[1600px] mx-auto flex items-center justify-between gap-4">
         
         {/* LADO ESQUERDO: Logo Marca & Breadcrumbs */}
@@ -68,7 +77,7 @@ export default function Navbar({
           )}
         </div>
 
-        {/* CENTRO: Toggle Switch Segmentado 2D / 3D (Visível apenas no Workspace) */}
+        {/* CENTRO: Toggle Switch Segmentado 2D / 3D Macro (Visível no Workspace) */}
         {currentView === 'WORKSPACE' ? (
           <div className="flex items-center bg-slate-900/90 border border-slate-800 p-1 rounded-2xl shadow-inner font-mono text-xs">
             <button
@@ -97,7 +106,7 @@ export default function Navbar({
           </div>
         ) : null}
 
-        {/* LADO DIREITO: Filtro de Arquivos + API Token */}
+        {/* LADO DIREITO: Filtro de Arquivos + API Token + Tela Cheia Minimalista */}
         <div className="flex items-center gap-3">
           {/* Filtro do Grafo (no Workspace) */}
           {currentView === 'WORKSPACE' && setFilterTerm && (
@@ -134,6 +143,25 @@ export default function Navbar({
             <Key className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">{hasToken ? 'Token Ativo' : 'API Token'}</span>
           </button>
+
+          {/* Botão de Tela Cheia Verdadeira Minimalista Integrado ao Header */}
+          {currentView === 'WORKSPACE' && onToggleFullScreen && (
+            <button
+              onClick={onToggleFullScreen}
+              className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+                isFullScreen
+                  ? 'bg-pink-950/60 border-pink-500/40 text-pink-400 shadow-neon-pink-sm'
+                  : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:border-cyan-500/50 hover:text-cyan-300'
+              }`}
+              title={isFullScreen ? 'Sair da Tela Cheia (ESC)' : 'Tela Cheia do Monitor'}
+            >
+              {isFullScreen ? (
+                <Minimize2 className="w-4 h-4 text-pink-400" />
+              ) : (
+                <Maximize2 className="w-4 h-4 text-cyan-400" />
+              )}
+            </button>
+          )}
         </div>
       </div>
     </header>
