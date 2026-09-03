@@ -84,6 +84,14 @@ export const useAppStore = create((set) => ({
   isMovingCamera: false,
   setIsMovingCamera: (isMoving) => set({ isMovingCamera: isMoving }),
 
+  // Target Dinâmico da Câmera 3D (Sincronizado com o Minimapa Interativo e Seleção de Nós)
+  cameraTarget: { x: 0, y: 0, z: 0 },
+  setCameraTarget: (target) => set({ cameraTarget: target }),
+
+  // Posição Atual da Câmera (para renderizar o retângulo de viewport no Minimapa)
+  cameraView: { x: 0, z: 0, zoom: 1 },
+  setCameraView: (view) => set({ cameraView: view }),
+
   // Estado do Web Worker / Carregamento do Grafo
   isLoadingGraph: false,
   setIsLoadingGraph: (isLoading) => set({ isLoadingGraph: isLoading }),

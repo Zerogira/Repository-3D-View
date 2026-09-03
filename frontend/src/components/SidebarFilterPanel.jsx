@@ -77,15 +77,15 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
 
   return (
     <div
-      className={`absolute top-4 left-4 z-30 transition-transform duration-300 ease-in-out flex items-start ${
+      className={`absolute top-4 left-4 bottom-4 z-30 transition-transform duration-300 ease-in-out flex items-start ${
         isSidebarOpen ? 'translate-x-0' : '-translate-x-[calc(100%-12px)]'
       }`}
     >
-      {/* Container Principal do Painel */}
-      <div className="w-72 bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 shadow-2xl backdrop-blur-xl space-y-4 max-h-[85vh] overflow-y-auto custom-scrollbar text-slate-200">
+      {/* Container Principal do Painel (flex flex-col h-full) */}
+      <div className="w-80 bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 shadow-2xl backdrop-blur-xl flex flex-col h-full overflow-hidden text-slate-200">
         
         {/* Header do Painel */}
-        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 shrink-0">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-cyan-400" />
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-100">
@@ -96,6 +96,9 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
             {nodeCount} nós
           </span>
         </div>
+
+        {/* Conteúdo Rolável: Categorias, Layouts e Toggles Visuais */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1 pt-2">
 
         {/* Seção 1: Filtros por Categoria Funcional */}
         <div className="space-y-2.5">
@@ -325,6 +328,7 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
           </button>
         </div>
       </div>
+    </div>
 
       {/* Botão Retrátil de Contrair/Expandir o Painel */}
       <button
