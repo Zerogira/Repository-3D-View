@@ -135,9 +135,11 @@ function LabelCard({ node, opacityRef }) {
       onPointerOver={(e) => {
         e.stopPropagation();
         document.body.style.cursor = 'pointer';
+        useAppStore.getState().setHoveredNode(node);
       }}
       onPointerOut={() => {
         document.body.style.cursor = 'auto';
+        useAppStore.getState().setHoveredNode(null);
       }}
     >
       <spriteMaterial

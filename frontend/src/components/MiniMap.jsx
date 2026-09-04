@@ -21,16 +21,21 @@ export default function MiniMap({ graphData, nodes: propNodes, links: propLinks 
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
 
   nodes.forEach((n) => {
-    const x = typeof n.x === 'number' ? n.x : 0;
-    const z = typeof n.z === 'number' ? n.z : 0;
+    const x = typeof n.x === 'number' && !isNaN(n.x) ? n.x : 0;
+    const z = typeof n.z === 'number' && !isNaN(n.z) ? n.z : 0;
     minX = Math.min(minX, x);
     maxX = Math.max(maxX, x);
     minZ = Math.min(minZ, z);
     maxZ = Math.max(maxZ, z);
   });
 
-  const rangeX = maxX - minX || 1;
-  const rangeZ = maxZ - minZ || 1;
+  if (!isFinite(minX)) minX = -100;
+  if (!isFinite(maxX)) maxX = 100;
+  if (!isFinite(minZ)) minZ = -100;
+  if (!isFinite(maxZ)) maxZ = 100;
+
+  const rangeX = Math.max(1, maxX - minX);
+  const rangeZ = Math.max(1, maxZ - minZ);
 
   // Converte posição do clique (0 a 100 no SVG) para coordenadas reais 3D
   const handleMapInteraction = useCallback(

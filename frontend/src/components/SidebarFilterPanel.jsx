@@ -50,6 +50,9 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
   const showFileLabels = useAppStore((s) => s.showFileLabels);
   const toggleShowFileLabels = useAppStore((s) => s.toggleShowFileLabels);
 
+  const showFileGeometry = useAppStore((s) => s.showFileGeometry);
+  const toggleShowFileGeometry = useAppStore((s) => s.toggleShowFileGeometry);
+
   const showGizmo = useAppStore((s) => s.showGizmo);
   const toggleShowGizmo = useAppStore((s) => s.toggleShowGizmo);
 
@@ -65,6 +68,9 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
   const layoutMode = useAppStore((s) => s.layoutMode);
   const setLayoutMode = useAppStore((s) => s.setLayoutMode);
 
+  const usePhysicsEngine = useAppStore((s) => s.usePhysicsEngine);
+  const toggleUsePhysicsEngine = useAppStore((s) => s.toggleUsePhysicsEngine);
+
   // Calcula a quantidade de nós por categoria funcional
   const categoryCounts = React.useMemo(() => {
     const counts = { FRONTEND: 0, BACKEND: 0, DATABASE: 0, CONFIG: 0, DOCS: 0 };
@@ -77,12 +83,12 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
 
   return (
     <div
-      className={`absolute top-4 left-4 bottom-4 z-30 transition-transform duration-300 ease-in-out flex items-start ${
+      className={`absolute top-4 left-4 bottom-[76px] max-h-[calc(100%-76px)] z-30 transition-transform duration-300 ease-in-out flex items-start ${
         isSidebarOpen ? 'translate-x-0' : '-translate-x-[calc(100%-12px)]'
       }`}
     >
-      {/* Container Principal do Painel (flex flex-col h-full) */}
-      <div className="w-80 bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 shadow-2xl backdrop-blur-xl flex flex-col h-full overflow-hidden text-slate-200">
+      {/* Container Principal do Painel (flex flex-col max-h-full) */}
+      <div className="w-80 max-h-full bg-slate-950/90 border border-slate-800/90 rounded-2xl p-4 shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden text-slate-200">
         
         {/* Header do Painel */}
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 shrink-0">
@@ -195,6 +201,32 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
                 <span>Universo (Órbitas)</span>
               </button>
             </div>
+
+            {/* Toggle Motor de Física 3D (BETA: d3-force-3d) */}
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={toggleUsePhysicsEngine}
+                className={`w-full px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+                  usePhysicsEngine
+                    ? 'bg-emerald-950/60 border-emerald-500/60 text-emerald-300 shadow-neon-emerald-sm'
+                    : 'bg-slate-950/60 border-slate-800/80 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+                title="Ativar/Desativar Simulação Estática de Forças 3D (d3-force-3d)"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    BETA
+                  </span>
+                  <span>Modo Física (3D Force)</span>
+                </div>
+                <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                  usePhysicsEngine ? 'bg-emerald-900/60 text-emerald-300' : 'bg-slate-800 text-slate-500'
+                }`}>
+                  {usePhysicsEngine ? 'ATIVO' : 'OFF'}
+                </span>
+              </button>
+            </div>
           </div>
 
           <span className="text-xs font-semibold text-slate-400 block pt-1">
@@ -252,6 +284,24 @@ export default function SidebarFilterPanel({ nodeCount = 0, nodes = [] }) {
             </div>
             <span className="text-[10px] font-bold uppercase">
               {showFileLabels ? 'ON' : 'OFF'}
+            </span>
+          </button>
+
+          {/* Toggle Geometria dos Arquivos (Bolinhas) */}
+          <button
+            onClick={toggleShowFileGeometry}
+            className={`w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between border transition-all cursor-pointer ${
+              showFileGeometry
+                ? 'bg-pink-950/40 border-pink-500/40 text-pink-300'
+                : 'bg-slate-900/50 border-slate-800 text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+              <span>Bolinhas dos Arquivos</span>
+            </div>
+            <span className="text-[10px] font-bold uppercase">
+              {showFileGeometry ? 'ON' : 'OFF'}
             </span>
           </button>
 

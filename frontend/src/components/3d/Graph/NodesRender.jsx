@@ -18,6 +18,7 @@ const tempColor = new THREE.Color();
 export default function NodesRender({ nodes = [] }) {
   const setSelectedNode = useAppStore((s) => s.setSelectedNode);
   const setHoveredNode = useAppStore((s) => s.setHoveredNode);
+  const showFileGeometry = useAppStore((s) => s.showFileGeometry);
 
   // Separa nós por tipo (diretórios vs arquivos)
   const dirNodes = useMemo(() => nodes.filter((n) => n.type === 'dir' || n.isDir), [nodes]);
@@ -28,6 +29,7 @@ export default function NodesRender({ nodes = [] }) {
 
   // Índice do nó atualmente sob o ponteiro do mouse
   const [hoveredState, setHoveredState] = useState({ type: null, index: -1 });
+  const prevHoveredRef = useRef({ type: null, index: -1 });
 
   // Guarda as posições interpoladas atuais (Voo Cósmico / Transição Suave)
   const dirPositionsRef = useRef([]);
@@ -61,6 +63,10 @@ export default function NodesRender({ nodes = [] }) {
     let dirNeedsUpdate = false;
     let fileNeedsUpdate = false;
 
+    const hoverChanged =
+      prevHoveredRef.current.type !== hoveredState.type ||
+      prevHoveredRef.current.index !== hoveredState.index;
+
     // 1. Interpolação de Diretórios
     if (dirMeshRef.current && dirNodes.length > 0) {
       for (let i = 0; i < dirNodes.length; i++) {
@@ -89,7 +95,7 @@ export default function NodesRender({ nodes = [] }) {
 
         const isHovered = hoveredState.type === 'dir' && hoveredState.index === i;
         const baseScale = 7.5 + Math.max(0, 4 - (target.depth || 0)) * 0.75;
-        const scale = isHovered ? baseScale * 1.3 : baseScale;
+        const scale = isHovered ? baseScale * 1.35 : baseScale;
 
         tempObject.position.set(current.x, current.y, current.z);
         tempObject.scale.set(scale, scale, scale);
@@ -104,9 +110,10 @@ export default function NodesRender({ nodes = [] }) {
         dirMeshRef.current.setColorAt(i, tempColor);
       }
 
-      if (dirNeedsUpdate || hoveredState.type === 'dir') {
+      if (dirNeedsUpdate || hoverChanged || hoveredState.type === 'dir' || prevHoveredRef.current.type === 'dir') {
         dirMeshRef.current.instanceMatrix.needsUpdate = true;
         if (dirMeshRef.current.instanceColor) dirMeshRef.current.instanceColor.needsUpdate = true;
+        dirMeshRef.current.computeBoundingSphere();
       }
     }
 
@@ -137,7 +144,7 @@ export default function NodesRender({ nodes = [] }) {
         }
 
         const isHovered = hoveredState.type === 'file' && hoveredState.index === i;
-        const scale = isHovered ? 4.2 : 3.2;
+        const scale = isHovered ? 2.5 : 1.2;
 
         tempObject.position.set(current.x, current.y, current.z);
         tempObject.scale.set(scale, scale, scale);
@@ -152,11 +159,14 @@ export default function NodesRender({ nodes = [] }) {
         fileMeshRef.current.setColorAt(i, tempColor);
       }
 
-      if (fileNeedsUpdate || hoveredState.type === 'file') {
+      if (fileNeedsUpdate || hoverChanged || hoveredState.type === 'file' || prevHoveredRef.current.type === 'file') {
         fileMeshRef.current.instanceMatrix.needsUpdate = true;
         if (fileMeshRef.current.instanceColor) fileMeshRef.current.instanceColor.needsUpdate = true;
+        fileMeshRef.current.computeBoundingSphere();
       }
     }
+
+    prevHoveredRef.current = hoveredState;
   });
 
   // Handlers de clique
@@ -232,8 +242,8 @@ export default function NodesRender({ nodes = [] }) {
         </instancedMesh>
       )}
 
-      {/* 2. InstancedMesh para Arquivos (Bolinhas Sólidas Maiores com Cores Vivas) */}
-      {fileNodes.length > 0 && (
+      {/* 2. InstancedMesh para Arquivos (Poeira Estelar Holográfica Sci-Fi com Additive Blending) */}
+      {showFileGeometry && fileNodes.length > 0 && (
         <instancedMesh
           ref={fileMeshRef}
           args={[null, null, fileNodes.length]}
@@ -241,8 +251,12 @@ export default function NodesRender({ nodes = [] }) {
           onPointerOver={handleFilePointerOver}
           onPointerOut={handleFilePointerOut}
         >
-          <sphereGeometry args={[1.5, 20, 20]} />
+          <sphereGeometry args={[0.8, 16, 16]} />
           <meshBasicMaterial
+            transparent={true}
+            opacity={0.65}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
             toneMapped={false}
           />
         </instancedMesh>

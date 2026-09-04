@@ -1,7 +1,8 @@
 import React, { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Stats, GizmoHelper, GizmoViewport } from '@react-three/drei';
+import { OrbitControls, GizmoHelper, GizmoViewport } from '@react-three/drei';
 import FloorGrid from './FloorGrid';
+import { PerformanceStatsTracker } from './PerformanceStatsOverlay';
 import { useAppStore } from '../../../core/store';
 
 /**
@@ -73,13 +74,13 @@ export default function SceneSetup({
       <pointLight position={[-150, 100, -150]} intensity={1.5} color="#22d3ee" distance={500} />
       <pointLight position={[150, 100, 150]} intensity={1.5} color="#ec4899" distance={500} />
 
-      {/* Trava Físico-Câmera Dinâmica: maxDistance e maxPolarAngle sincronizados ao repositório */}
+      {/* Trava Físico-Câmera Dinâmica: maxDistance e maxPolarAngle permitindo ver a cascata vertical */}
       <OrbitControls
         ref={controlsRef}
         makeDefault
         enableDamping
         dampingFactor={0.05}
-        maxPolarAngle={Math.PI / 2 - 0.02}
+        maxPolarAngle={Math.PI * 0.85}
         minDistance={10}
         maxDistance={maxCameraDistance}
         autoRotate={autoRotate}
@@ -88,8 +89,8 @@ export default function SceneSetup({
         onEnd={() => setIsMovingCamera(false)}
       />
 
-      {/* Painel de Métricas de Performance da GPU */}
-      {showStats && <Stats className="react-three-stats" />}
+      {/* Tracker de Métricas de Performance 3D (Text-Only, sem distorção de canvas) */}
+      {showStats && <PerformanceStatsTracker />}
 
       {/* Bússola 3D de Orientação Tática (Gizmo) flutuando ergonomicamente acima do minimapa */}
       {showGizmo && (

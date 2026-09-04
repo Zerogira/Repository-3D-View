@@ -7,12 +7,27 @@ echo        GitTree Visualizer 3D - Frontend (React + Vite)
 echo ========================================================
 echo.
 
+cd /d "%~dp0frontend"
+
 echo [FRONTEND] Verificando dependencias Node.js...
-if not exist "frontend\node_modules" (
-    echo [FRONTEND] Instalando pacotes npm...
-    cd /d "%~dp0frontend"
+
+set "NEED_INSTALL=0"
+if not exist "node_modules" (
+    set "NEED_INSTALL=1"
+) else (
+    call node check_deps.cjs >nul 2>nul
+    if errorlevel 1 set "NEED_INSTALL=1"
+)
+
+if "%NEED_INSTALL%"=="1" (
+    echo [FRONTEND] Dependencias ausentes ou desatualizadas detectadas.
+    echo [FRONTEND] Executando npm install --legacy-peer-deps...
     call npm install --legacy-peer-deps
-    cd /d "%~dp0"
+    if not errorlevel 1 (
+        call node check_deps.cjs --save-cache >nul 2>nul
+    )
+) else (
+    echo [FRONTEND] Todas as dependencias estao instaladas e atualizadas.
 )
 
 echo.
@@ -22,5 +37,4 @@ echo   - Aplicacao: http://localhost:5173
 echo ========================================================
 echo.
 
-cd /d "%~dp0frontend"
-npm run dev
+call npm run dev

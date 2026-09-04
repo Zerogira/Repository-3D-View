@@ -9,14 +9,17 @@ import * as THREE from 'three';
  * - Estética cósmica neon (ciano/azul/roxo) com transparência sutil que desenha as órbitas dos arquivos.
  */
 export default function OrbitRingsRender({ rings = [] }) {
-  const linePositions = useMemo(() => {
-    if (!rings || !rings.length) return new Float32Array(0);
+  const { linePositions, lineColors } = useMemo(() => {
+    if (!rings || !rings.length) return { linePositions: new Float32Array(0), lineColors: new Float32Array(0) };
 
     const segmentsPerRing = 48;
     const coords = [];
+    const colors = [];
+    const tempColor = new THREE.Color();
 
     rings.forEach((ring) => {
-      const { x = 0, y = 0, z = 0, radius = 20 } = ring;
+      const { x = 0, y = 0, z = 0, radius = 20, color = '#38bdf8' } = ring;
+      tempColor.set(color);
 
       for (let i = 0; i < segmentsPerRing; i++) {
         const theta1 = (i / segmentsPerRing) * Math.PI * 2;
@@ -29,26 +32,34 @@ export default function OrbitRingsRender({ rings = [] }) {
 
         coords.push(x1, y, z1);
         coords.push(x2, y, z2);
+
+        colors.push(tempColor.r, tempColor.g, tempColor.b);
+        colors.push(tempColor.r, tempColor.g, tempColor.b);
       }
     });
 
-    return new Float32Array(coords);
+    return {
+      linePositions: new Float32Array(coords),
+      lineColors: new Float32Array(colors),
+    };
   }, [rings]);
 
   const geometry = useMemo(() => {
+    if (linePositions.length === 0) return null;
     const geom = new THREE.BufferGeometry();
     geom.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(lineColors, 3));
     return geom;
-  }, [linePositions]);
+  }, [linePositions, lineColors]);
 
-  if (!rings.length || linePositions.length === 0) return null;
+  if (!rings.length || !geometry) return null;
 
   return (
     <lineSegments geometry={geometry}>
       <lineBasicMaterial
-        color="#38bdf8"
+        vertexColors={true}
         transparent={true}
-        opacity={0.3}
+        opacity={0.35}
         depthWrite={false}
       />
     </lineSegments>

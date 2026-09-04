@@ -1,22 +1,28 @@
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
+import { Line } from '@react-three/drei';
 
 /**
  * src/components/3d/Graph/EdgesRender.jsx
  * 
- * Renderizador de conexões 3D em 1 Single Draw Call para a GPU.
- * Compila todas as linhas de ligação em um único Float32Array + THREE.BufferGeometry e renderiza via <lineSegments>.
+ * Renderizador híbrido de conexões 3D:
+ * 1. Pasta -> Pasta: Conexões de infraestrutura via <Line> do @react-three/drei (MeshLine)
+ *    com espessura real (lineWidth={3}), cor herdada da ramificação (branchColor) e brilho neon.
+ * 2. Pasta -> Arquivo: Conexões em lote (BufferGeometry / lineSegments) com cores de vértice
+ *    combinando perfeitamente com a cor do ramo para manter alta performance a 60 FPS.
  */
 export default function EdgesRender({ nodes = [], links = [] }) {
-  // Separa as posições das conexões: Pasta -> Pasta vs Pasta -> Arquivo (Pilar)
-  const { folderPositions, filePositions } = useMemo(() => {
+  // Separa as conexões entre pastas e arquivos
+  const { folderLinks, filePositions, fileColors } = useMemo(() => {
     if (!nodes.length || !links.length) {
-      return { folderPositions: new Float32Array(0), filePositions: new Float32Array(0) };
+      return { folderLinks: [], filePositions: new Float32Array(0), fileColors: new Float32Array(0) };
     }
 
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-    const folderPosList = [];
+    const folderList = [];
     const filePosList = [];
+    const fileColList = [];
+    const tempColor = new THREE.Color();
 
     links.forEach((link) => {
       const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
@@ -27,55 +33,67 @@ export default function EdgesRender({ nodes = [], links = [] }) {
 
       if (sourceNode && targetNode) {
         const isTargetFile = targetNode.type !== 'dir' && !targetNode.isDir;
-        const targetList = isTargetFile ? filePosList : folderPosList;
 
-        targetList.push(sourceNode.x || 0, sourceNode.y || 0, sourceNode.z || 0);
-        targetList.push(targetNode.x || 0, targetNode.y || 0, targetNode.z || 0);
+        if (isTargetFile) {
+          filePosList.push(sourceNode.x || 0, sourceNode.y || 0, sourceNode.z || 0);
+          filePosList.push(targetNode.x || 0, targetNode.y || 0, targetNode.z || 0);
+
+          const colorHex = targetNode.branchColor || targetNode.color || '#38bdf8';
+          tempColor.set(colorHex);
+          fileColList.push(tempColor.r, tempColor.g, tempColor.b);
+          fileColList.push(tempColor.r, tempColor.g, tempColor.b);
+        } else {
+          // Conexão Pasta -> Pasta
+          const p1 = [sourceNode.x || 0, sourceNode.y || 0, sourceNode.z || 0];
+          const p2 = [targetNode.x || 0, targetNode.y || 0, targetNode.z || 0];
+          const color = targetNode.branchColor || targetNode.color || '#ffffff';
+          folderList.push({
+            id: `${sourceId}-${targetId}`,
+            points: [p1, p2],
+            color,
+          });
+        }
       }
     });
 
     return {
-      folderPositions: new Float32Array(folderPosList),
+      folderLinks: folderList,
       filePositions: new Float32Array(filePosList),
+      fileColors: new Float32Array(fileColList),
     };
   }, [nodes, links]);
 
-  // Geometria para as conexões entre Pastas (Ciano Brilhante)
-  const folderGeometry = useMemo(() => {
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.BufferAttribute(folderPositions, 3));
-    return geom;
-  }, [folderPositions]);
-
-  // Geometria para as conexões dos Pilares de Arquivos (Cinza/Rosa Translúcido Sutil)
+  // Geometria para as conexões dos Pilares de Arquivos com Vertex Colors
   const fileGeometry = useMemo(() => {
+    if (filePositions.length === 0) return null;
     const geom = new THREE.BufferGeometry();
     geom.setAttribute('position', new THREE.BufferAttribute(filePositions, 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(fileColors, 3));
     return geom;
-  }, [filePositions]);
+  }, [filePositions, fileColors]);
 
   return (
     <group>
-      {/* 1. Conexões de Infraestrutura: Pasta -> Pasta (Fios de Luz Brancos Translúcidos 0.35) */}
-      {folderPositions.length > 0 && (
-        <lineSegments geometry={folderGeometry}>
-          <lineBasicMaterial
-            color="#ffffff"
-            transparent={true}
-            opacity={0.35}
-            linewidth={1.5}
-            depthWrite={false}
-          />
-        </lineSegments>
-      )}
+      {/* 1. Conexões de Tronco / Ramos Principais (Drei MeshLine com espessura real e cores por ramo) */}
+      {folderLinks.map((fLink) => (
+        <Line
+          key={fLink.id}
+          points={fLink.points}
+          color={fLink.color}
+          lineWidth={3.2}
+          transparent
+          opacity={0.7}
+          depthWrite={false}
+        />
+      ))}
 
-      {/* 2. Conexões dos Pilares: Pasta -> Arquivo (Fios de Luz Brancos Sutis 0.22) */}
-      {filePositions.length > 0 && (
+      {/* 2. Conexões dos Arquivos: Fios finos coloridos por vértice na paleta de cada galho */}
+      {fileGeometry && (
         <lineSegments geometry={fileGeometry}>
           <lineBasicMaterial
-            color="#ffffff"
+            vertexColors={true}
             transparent={true}
-            opacity={0.22}
+            opacity={0.35}
             linewidth={1}
             depthWrite={false}
           />

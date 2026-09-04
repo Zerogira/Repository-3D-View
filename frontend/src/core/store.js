@@ -46,6 +46,11 @@ export const useAppStore = create((set) => ({
   activeLayout: 'classic',
   setActiveLayout: (mode) => set({ layoutMode: mode, activeLayout: mode }),
 
+  // Motor de Física 3D (BETA: d3-force-3d)
+  usePhysicsEngine: false,
+  setUsePhysicsEngine: (status) => set({ usePhysicsEngine: status }),
+  toggleUsePhysicsEngine: () => set((state) => ({ usePhysicsEngine: !state.usePhysicsEngine })),
+
   // Toggles de Recursos Visuais 3D
   showEdges: true,
   setShowEdges: (show) => set({ showEdges: show }),
@@ -63,6 +68,10 @@ export const useAppStore = create((set) => ({
   setShowFileLabels: (show) => set({ showFileLabels: show }),
   toggleShowFileLabels: () => set((state) => ({ showFileLabels: !state.showFileLabels })),
 
+  showFileGeometry: true,
+  setShowFileGeometry: (show) => set({ showFileGeometry: show }),
+  toggleShowFileGeometry: () => set((state) => ({ showFileGeometry: !state.showFileGeometry })),
+
   showGizmo: true,
   setShowGizmo: (show) => set({ showGizmo: show }),
   toggleShowGizmo: () => set((state) => ({ showGizmo: !state.showGizmo })),
@@ -70,6 +79,10 @@ export const useAppStore = create((set) => ({
   showStats: true,
   setShowStats: (show) => set({ showStats: show }),
   toggleShowStats: () => set((state) => ({ showStats: !state.showStats })),
+
+  // Estatísticas de performance em texto (FPS, MS, MB)
+  perfStats: { fps: 60, ms: '16.6', memoryMb: null },
+  setPerfStats: (stats) => set({ perfStats: stats }),
 
   showGrid: true,
   setShowGrid: (show) => set({ showGrid: show }),

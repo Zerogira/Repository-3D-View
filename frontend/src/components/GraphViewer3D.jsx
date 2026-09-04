@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { Canvas } from '@react-three/fiber';
 import SceneSetup from './3d/Environment/SceneSetup';
 import GraphRenderer from './3d/Graph/GraphRenderer';
 import SidebarFilterPanel from './SidebarFilterPanel';
 import MiniMap from './MiniMap';
+import { PerformanceStatsTextCard } from './3d/Environment/PerformanceStatsOverlay';
 import { useAppStore } from '../core/store';
 import { computeCylindricalLayout, computeUniverseLayout } from '../core/layoutEngine';
 
@@ -35,6 +35,7 @@ export default function GraphViewer3D({
   const setShowFileLabels = useAppStore((s) => s.setShowFileLabels);
   const showStats = useAppStore((s) => s.showStats);
   const layoutMode = useAppStore((s) => s.layoutMode);
+  const usePhysicsEngine = useAppStore((s) => s.usePhysicsEngine);
   const workerRef = useRef(null);
 
   // Instanciação e controle do Web Worker
@@ -86,6 +87,7 @@ export default function GraphViewer3D({
         nodes: graphData.nodes,
         links: graphData.links || graphData.hierarchyLinks || [],
         layout: layoutMode,
+        usePhysicsEngine: !!usePhysicsEngine,
       });
 
       return () => {
@@ -98,68 +100,9 @@ export default function GraphViewer3D({
       setCalculatedData(fallbackData);
       setIsProcessingLayout(false);
     }
-  }, [graphData, layoutMode]);
+  }, [graphData, layoutMode, usePhysicsEngine]);
 
   const containerRef = useRef(null);
-  const [isNativeFullScreen, setIsNativeFullScreen] = useState(false);
-
-  // Sincroniza com eventos nativos do navegador (F11, ESC ou API requestFullscreen)
-  useEffect(() => {
-    const handleFullScreenChange = () => {
-      const isFull = Boolean(document.fullscreenElement);
-      setIsNativeFullScreen(isFull);
-      if (!isFull && isFullScreen && onToggleFullScreen) {
-        onToggleFullScreen();
-      }
-    };
-
-    document.addEventListener('fullscreenchange', handleFullScreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullScreenChange);
-
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullScreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullScreenChange);
-    };
-  }, [isFullScreen, onToggleFullScreen]);
-
-  // Função para Alternar Tela Cheia Verdadeira no Monitor
-  const handleToggleTrueFullScreen = () => {
-    if (!document.fullscreenElement) {
-      if (containerRef.current?.requestFullscreen) {
-        containerRef.current.requestFullscreen().catch(() => {});
-      } else if (containerRef.current?.webkitRequestFullscreen) {
-        containerRef.current.webkitRequestFullscreen();
-      }
-      if (onToggleFullScreen && !isFullScreen) {
-        onToggleFullScreen();
-      }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-      } else if (document.webkitExitFullscreen) {
-        document.webkitExitFullscreen();
-      }
-      if (onToggleFullScreen && isFullScreen) {
-        onToggleFullScreen();
-      }
-    }
-  };
-
-  // Tecla ESC para sair do modo Tela Cheia
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && (isFullScreen || isNativeFullScreen)) {
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        }
-        if (isFullScreen && onToggleFullScreen) {
-          onToggleFullScreen();
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullScreen, isNativeFullScreen, onToggleFullScreen]);
 
   // Filtro de Busca em Tempo Real e Categorias Funcionais
   const filteredNodes = useMemo(() => {
@@ -186,16 +129,12 @@ export default function GraphViewer3D({
     return result;
   }, [calculatedData.nodes, filterTerm, activeCategories]);
 
-  const isActuallyFull = isFullScreen || isNativeFullScreen;
-
   // Conteúdo Principal da Viewport 3D
-  const content = (
+  return (
     <div
       ref={containerRef}
-      className={`w-full h-full bg-[#070a12] flex flex-col ${
-        isActuallyFull
-          ? 'fixed inset-0 z-[99999] w-screen h-screen overflow-hidden'
-          : 'relative overflow-hidden rounded-2xl border border-slate-800'
+      className={`w-full h-full bg-[#070a12] flex flex-col relative overflow-hidden ${
+        isFullScreen ? '' : 'rounded-2xl border border-slate-800'
       }`}
     >
       {/* Painel de Controle e Filtros Lateral Esquerdo Retrátil */}
@@ -250,12 +189,9 @@ export default function GraphViewer3D({
       <div className="absolute bottom-4 right-4 z-20 pointer-events-auto">
         <MiniMap nodes={filteredNodes} links={calculatedData.links} />
       </div>
+
+      {/* Card de Métricas de Performance 100% em Texto Nítido (Canto Inferior Esquerdo) */}
+      <PerformanceStatsTextCard />
     </div>
   );
-
-  if (isActuallyFull) {
-    return createPortal(content, document.body);
-  }
-
-  return content;
 }

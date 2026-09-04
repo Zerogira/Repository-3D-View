@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, Key, FolderGit2, Sparkles, History, Trash2 } from 'lucide-react';
+import { AlertCircle, Key, FolderGit2, Sparkles, History, Trash2, Minimize } from 'lucide-react';
 import Navbar from './components/Navbar';
 import SearchBar from './components/SearchBar';
 import GraphViewer3D from './components/GraphViewer3D';
@@ -49,9 +49,21 @@ export default function App() {
     const handleFsChange = () => {
       setIs3DFullScreen(Boolean(document.fullscreenElement));
     };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && is3DFullScreen) {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+        setIs3DFullScreen(false);
+      }
+    };
     document.addEventListener('fullscreenchange', handleFsChange);
-    return () => document.removeEventListener('fullscreenchange', handleFsChange);
-  }, []);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [is3DFullScreen]);
 
   // Selected Node state (sincronizado com Zustand para os nós 3D/2D)
   const selectedNode = useAppStore((s) => s.selectedNode);
@@ -131,19 +143,21 @@ export default function App() {
   return (
     <div className="h-screen w-screen bg-[#070a12] text-slate-100 flex flex-col overflow-hidden font-sans select-none">
       {/* Header Superior Limpo */}
-      <Navbar
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        onOpenTokenModal={() => setIsTokenModalOpen(true)}
-        hasToken={hasToken}
-        currentView={currentView}
-        activeRepo={activeRepo}
-        onBackToHome={() => setCurrentView('HOME')}
-        filterTerm={filterTerm}
-        setFilterTerm={setFilterTerm}
-        isFullScreen={is3DFullScreen}
-        onToggleFullScreen={toggleFullScreen}
-      />
+      {!is3DFullScreen && (
+        <Navbar
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          onOpenTokenModal={() => setIsTokenModalOpen(true)}
+          hasToken={hasToken}
+          currentView={currentView}
+          activeRepo={activeRepo}
+          onBackToHome={() => setCurrentView('HOME')}
+          filterTerm={filterTerm}
+          setFilterTerm={setFilterTerm}
+          isFullScreen={is3DFullScreen}
+          onToggleFullScreen={toggleFullScreen}
+        />
+      )}
 
       {/* ROTA 1: PÁGINA INICIAL (HOME) */}
       {currentView === 'HOME' ? (
@@ -218,7 +232,11 @@ export default function App() {
         </main>
       ) : (
         /* ROTA 2: WORKSPACE DE VISUALIZAÇÃO (CANVAS EXPANDIDO 100vh) */
-        <main className="flex-1 w-full h-full relative overflow-hidden bg-[#070a12]">
+        <main
+          className={`flex-1 w-full h-full relative overflow-hidden bg-[#070a12] ${
+            is3DFullScreen ? 'fixed inset-0 z-30 w-screen h-screen' : ''
+          }`}
+        >
           {isLoading ? (
             <div className="w-full h-full bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center space-y-4">
               <div className="relative w-16 h-16">
@@ -262,6 +280,20 @@ export default function App() {
             </div>
           ) : null}
         </main>
+      )}
+
+      {/* Botão Flutuante Centralizado para Sair da Tela Cheia quando em Fullscreen */}
+      {is3DFullScreen && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center pointer-events-auto">
+          <button
+            onClick={toggleFullScreen}
+            className="px-4 py-1.5 bg-slate-950/90 hover:bg-cyan-950/90 border border-slate-700 hover:border-cyan-500/80 text-slate-200 hover:text-cyan-300 text-xs font-mono font-bold rounded-full shadow-2xl backdrop-blur-xl flex items-center gap-2 transition-all cursor-pointer"
+            title="Sair da Tela Cheia (ESC)"
+          >
+            <Minimize className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Sair da Tela Cheia (ESC)</span>
+          </button>
+        </div>
       )}
 
       {/* Drawer Lateral Retrátil de Código-Fonte (Syntax Highlighter) */}

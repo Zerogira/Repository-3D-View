@@ -154,7 +154,7 @@ export default function CodeViewerPanel({
         animate={{ x: 0, opacity: 1 }}
         exit={{ x: '100%', opacity: 0 }}
         transition={{ type: 'spring', damping: 28, stiffness: 240 }}
-        className="fixed top-0 right-0 bottom-0 z-40 w-full max-w-xl md:max-w-2xl bg-slate-950/95 border-l border-slate-800 shadow-2xl backdrop-blur-2xl flex flex-col pointer-events-auto"
+        className="fixed top-0 right-0 bottom-0 z-50 w-full max-w-xl md:max-w-2xl bg-slate-950/95 border-l border-slate-800 shadow-2xl backdrop-blur-2xl flex flex-col pointer-events-auto"
       >
         {/* Top Header com Caminho Completo e Ações */}
         <div className="p-4 border-b border-slate-800/80 flex items-center justify-between gap-3 bg-slate-900/60 shrink-0">

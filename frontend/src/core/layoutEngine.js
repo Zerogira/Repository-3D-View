@@ -31,6 +31,19 @@ export function getNodeCategoryAndColor(filename, isDir = false) {
   return { category: 'BACKEND', color: '#f472b6' };
 }
 
+/**
+ * Calcula o raio da "Zona de Exclusão" de uma pasta:
+ * Leva em consideração o raio orbital máximo que seus arquivos diretos ocuparão
+ * mais o número de subpastas, garantindo que suas órbitas nunca colidam.
+ */
+export function getFolderExclusionRadius(fileCount = 0, subfolderCount = 0) {
+  if (fileCount === 0) return Math.max(38, subfolderCount * 14);
+  const baseOrbitRadius = Math.max(38, (fileCount * 3.4) / 1.5);
+  const ringCount = Math.ceil(fileCount / 14);
+  const maxOrbitRadius = baseOrbitRadius + (ringCount - 1) * 22;
+  return maxOrbitRadius + 30; // Margem de segurança livre de colisão
+}
+
 export function computeCylindricalLayout(rawNodes, rawLinks) {
   if (!Array.isArray(rawNodes) || rawNodes.length === 0) {
     return { nodes: [], links: [] };
@@ -86,7 +99,25 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
   }
   calculateWeights(rootNode.id);
 
-  // 4. Calcula Profundidade (BFS)
+  // 4. Calcula Profundidade (BFS) e Herança de Cores por Ramo (Branch Coloring)
+  // Direct children of root divide 360° chromatic circle
+  const rootChildren = rootNode.children || [];
+  const totalRootBranches = Math.max(1, rootChildren.length);
+  
+  rootNode.branchColor = '#ffffff';
+  rootNode.depth = 0;
+
+  rootChildren.forEach((childId, idx) => {
+    const child = nodeMap.get(childId);
+    if (child) {
+      const hue = Math.round((idx / totalRootBranches) * 360);
+      child.branchColor = `hsl(${hue}, 85%, 60%)`;
+      if (child.isDir) {
+        child.color = child.branchColor;
+      }
+    }
+  });
+
   let queue = [rootNode];
   let visited = new Set([rootNode.id]);
   while (queue.length > 0) {
@@ -96,6 +127,13 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
         let child = nodeMap.get(childId);
         if (child) {
           child.depth = current.depth + 1;
+          // Herança da cor do ramo pai
+          if (!child.branchColor) {
+            child.branchColor = current.branchColor || '#38bdf8';
+          }
+          // Todos os nós (pastas e arquivos) herdam a cor da sua ramificação principal
+          child.color = child.branchColor;
+
           visited.add(childId);
           queue.push(child);
         }
@@ -104,8 +142,8 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
   }
 
   const CONFIG = {
-    ROOT_Y: 100,
-    BASE_MODULE_RADIUS: 80, // Raio do anel central igualitário
+    ROOT_Y: 200,
+    DEPTH_Y_STEP: 180, // Expansão vertical das camadas (evita colisão de saias e cones)
   };
 
   rootNode.x = 0;
@@ -130,40 +168,52 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
       const parent = nodeMap.get(parentId) || rootNode;
       const { folders, files } = parentGroups[parentId];
       
-      // ==========================================
-      // A. LAYOUT DAS PASTAS (Ponto Doce Ajustado)
-      // ==========================================
+      // =========================================================================
+      // A. LAYOUT DAS PASTAS: ZONAS DE EXCLUSÃO + EXPANSÃO VERTICAL EM NÍVEIS
+      // =========================================================================
       const totalFolderWeight = folders.reduce((sum, f) => sum + f.weight, 0);
       let accumulatedWeight = 0;
+
+      // Calcula o perímetro necessário para acomodar confortavelmente todas as zonas de exclusão no Nível 1
+      const totalExclusionDiameters = folders.reduce((sum, f) => {
+        return sum + getFolderExclusionRadius(f.fileCount, (f.children || []).length) * 2.5;
+      }, 0);
+      const minLevel1Ring = Math.max(220, totalExclusionDiameters / (Math.PI * 2));
 
       folders.forEach((node, index) => {
         const midWeight = accumulatedWeight + node.weight / 2;
         accumulatedWeight += node.weight;
 
+        // Expansão Vertical Proporcional à Profundidade (node.y = -(depth * step))
+        const baseLayerY = CONFIG.ROOT_Y - (node.depth * CONFIG.DEPTH_Y_STEP);
+        const staggerY = (index % 2 === 0 ? 30 : -30) + randomJitter(15);
+
         if (d === 1) {
           const angle = (index / Math.max(1, folders.length)) * (Math.PI * 2);
+          const myExclusion = getFolderExclusionRadius(node.fileCount, (node.children || []).length);
 
-          // Ponto Doce Nível 1: Base 80 + multiplicador 7
-          const pushDistance = 80 + Math.sqrt(node.weight) * 7;
+          // Espaçamento Dinâmico: Base no anel expandido + zona de exclusão individual da pasta
+          const pushDistance = Math.max(minLevel1Ring, 160 + myExclusion * 1.3);
 
           node.x = Math.cos(angle) * pushDistance;
           node.z = Math.sin(angle) * pushDistance;
-          node.y = parent.y + (index % 2 === 0 ? 25 : -25) + randomJitter(10);
+          node.y = baseLayerY + staggerY;
         } else {
-          // NÍVEIS 2+: Subúrbios em Leque
+          // NÍVEIS 2+: Subúrbios em Leque com Zonas de Exclusão e Raio Proporcional a Descendentes
           const angleFromCenter = Math.atan2(parent.z, parent.x);
-          const maxSpread = Math.min(Math.PI * 1.2, 0.6 + folders.length * 0.15);
+          const maxSpread = Math.min(Math.PI * 1.4, 0.8 + folders.length * 0.25);
           const proportion = totalFolderWeight > 0 ? midWeight / totalFolderWeight - 0.5 : 0;
           const spreadAngle = angleFromCenter + proportion * maxSpread;
 
-          // Ponto Doce Níveis 2+: Base 45 + multiplicadores ajustados (5 e 8)
-          const pushDistance = 45 + Math.sqrt(parent.weight) * 5 + Math.sqrt(node.weight) * 8;
+          // Espaçamento Dinâmico: Proporcional à quantidade de descendentes e raio de exclusão
+          const parentExclusion = getFolderExclusionRadius(parent.fileCount, (parent.children || []).length);
+          const childExclusion = getFolderExclusionRadius(node.fileCount, (node.children || []).length);
+          const weightBoost = Math.min(100, (node.weight || 1) * 3.5);
+          const pushDistance = parentExclusion + childExclusion + 60 + weightBoost;
 
           node.x = parent.x + Math.cos(spreadAngle) * pushDistance;
           node.z = parent.z + Math.sin(spreadAngle) * pushDistance;
-
-          // Oscilação vertical moderada (30 / -30)
-          node.y = parent.y + (index % 2 === 0 ? 30 : -30) + randomJitter(15);
+          node.y = baseLayerY + staggerY;
         }
       });
 
@@ -173,9 +223,7 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
       const fileCount = files.length;
       if (fileCount > 0) {
         // Dispersão Dinâmica: o raio expande com base na quantidade de filhos
-        // Perímetro necessário = fileCount * tamanhoDaBolinha / 1.5
-        const dynamicBaseRadius = Math.max(28, (fileCount * 3.2) / 1.5);
-        // Ajusta quantidade por andar dependendo do perímetro disponível
+        const dynamicBaseRadius = Math.max(34, (fileCount * 3.5) / 1.5);
         const filesPerFloor = Math.min(16, Math.max(8, Math.floor(dynamicBaseRadius / 3.5)));
 
         let filesPlaced = 0;
@@ -183,8 +231,7 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
 
         while (filesPlaced < fileCount) {
           const filesInThisRing = Math.min(filesPerFloor, fileCount - filesPlaced);
-          // Pequena expansão radial nos andares superiores para formar cone cônico suave
-          const ringRadius = dynamicBaseRadius + (currentRing - 1) * 3;
+          const ringRadius = dynamicBaseRadius + (currentRing - 1) * 6;
 
           for (let i = 0; i < filesInThisRing; i++) {
             const node = files[filesPlaced + i];
@@ -192,7 +239,7 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
 
             node.x = parent.x + Math.cos(angle) * ringRadius;
             node.z = parent.z + Math.sin(angle) * ringRadius;
-            node.y = parent.y + 24 + currentRing * 18;
+            node.y = parent.y + 24 + currentRing * 16;
           }
 
           filesPlaced += filesInThisRing;
@@ -290,7 +337,7 @@ export function computeUniverseLayout(rawNodes, rawLinks) {
         y: parent.y || 0,
         z: parent.z || 0,
         radius: ringRadius,
-        color: parent.color || '#38bdf8',
+        color: parent.branchColor || parent.color || '#38bdf8',
       });
 
       // Inclinação suave do plano orbital individual de cada pasta para dar profundidade cósmica
