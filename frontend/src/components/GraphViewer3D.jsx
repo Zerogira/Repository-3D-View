@@ -161,7 +161,7 @@ export default function GraphViewer3D({
       <div className="w-full h-full">
         <Canvas
           shadows
-          camera={{ position: [0, 220, 450], fov: 50, near: 1, far: 3500 }}
+          camera={{ position: [0, 220, 450], fov: 50, near: 1, far: 20000 }}
           gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
           onCreated={({ gl }) => {
             gl.setClearColor('#070a12');

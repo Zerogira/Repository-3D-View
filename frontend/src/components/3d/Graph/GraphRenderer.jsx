@@ -25,8 +25,8 @@ export default function GraphRenderer({ nodes = [], links = [], orbitRings = [] 
 
   return (
     <group>
-      {/* 1. Anéis de Órbitas Planetárias (Modo Universe) */}
-      {layoutMode === 'universe' && <OrbitRingsRender rings={orbitRings} />}
+      {/* 1. Anéis de Órbitas Planetárias (Modo Universe sincronizado com nós pais) */}
+      {layoutMode === 'universe' && <OrbitRingsRender rings={orbitRings} nodes={nodes} />}
 
       {/* 2. Conexões entre pastas e arquivos (Linhas) */}
       {showEdges && <EdgesRender nodes={nodes} links={links} />}

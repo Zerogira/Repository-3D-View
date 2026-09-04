@@ -94,7 +94,11 @@ export default function NodesRender({ nodes = [] }) {
         }
 
         const isHovered = hoveredState.type === 'dir' && hoveredState.index === i;
-        const baseScale = 7.5 + Math.max(0, 4 - (target.depth || 0)) * 0.75;
+        const isRoot = target.isRoot || target.depth === 0 || target.id === 'root';
+        // Se for o nó raiz (Sol do Sistema Solar), ganha porte solar maior e de destaque
+        const baseScale = isRoot
+          ? 14.0 // Sol do repositório
+          : 7.5 + Math.max(0, 4 - (target.depth || 0)) * 0.75;
         const scale = isHovered ? baseScale * 1.35 : baseScale;
 
         tempObject.position.set(current.x, current.y, current.z);
@@ -104,7 +108,8 @@ export default function NodesRender({ nodes = [] }) {
 
         dirMeshRef.current.setMatrixAt(i, tempObject.matrix);
 
-        const baseColor = target.color || '#00f0ff';
+        // Cor: Sol amarelo dourado radiante (#facc15) para a raiz, ou cor do ramo para as demais pastas
+        const baseColor = isRoot ? '#facc15' : (target.color || '#00f0ff');
         const colorHex = isHovered ? '#ffffff' : baseColor;
         tempColor.set(colorHex);
         dirMeshRef.current.setColorAt(i, tempColor);

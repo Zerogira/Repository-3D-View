@@ -74,15 +74,15 @@ export default function EdgesRender({ nodes = [], links = [] }) {
 
   return (
     <group>
-      {/* 1. Conexões de Tronco / Ramos Principais (Drei MeshLine com espessura real e cores por ramo) */}
+      {/* 1. Conexões de Tronco / Ramos Principais (Fios laser ultrafinos e precisos) */}
       {folderLinks.map((fLink) => (
         <Line
           key={fLink.id}
           points={fLink.points}
           color={fLink.color}
-          lineWidth={3.2}
+          lineWidth={0.8}
           transparent
-          opacity={0.7}
+          opacity={0.55}
           depthWrite={false}
         />
       ))}

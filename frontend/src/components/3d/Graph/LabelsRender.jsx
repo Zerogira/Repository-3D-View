@@ -1,125 +1,40 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Billboard } from '@react-three/drei';
+import { Text, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 import { useAppStore } from '../../../core/store';
 
 const centerVector = new THREE.Vector3(0, 0, 0);
-const MAX_VISIBLE_LABELS = 1000;
-const LOD_DISTANCE_THRESHOLD = 3000;
 
 /**
- * Função utilitária para desenhar retângulos com cantos arredondados no Canvas 2D
+ * Componente individual de Texto WebGL Nativo via SDF (Signed Distance Fields / Troika Engine)
+ * - Renderização 100% acelerada pela GPU (Zero tags HTML/DOM, Zero alocação de CanvasTexture)
+ * - Texto nítido e legível a qualquer zoom com outline e sombras escuras integradas
+ * - Billboard nativo: O texto sempre fica voltado para a câmera sem cálculos de CPU no DOM
  */
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-/**
- * Gera a textura 2D do Card do Nó baseada na especificação Tree of Knowledge (PDF).
- * Cria um card cibernético com fundo escuro, texto branco nítido e borda neon com a cor do nó/categoria.
- */
-function makeLabelTexture(text, borderColor, isDir = false) {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-
-  const padX = isDir ? 22 : 16;
-  const padY = isDir ? 14 : 10;
-  const font = isDir
-    ? 'bold 30px "JetBrains Mono", Consolas, Inter, sans-serif'
-    : '500 22px "JetBrains Mono", Consolas, Inter, sans-serif';
-
-  ctx.font = font;
-
-  const displayText = isDir ? `📂 ${text.toUpperCase()}` : text;
-  const truncatedText =
-    displayText.length > 30 ? `${displayText.slice(0, 29)}…` : displayText;
-  const tw = Math.ceil(ctx.measureText(truncatedText).width);
-
-  const w = tw + padX * 2;
-  const h = (isDir ? 44 : 34) + padY * 2;
-
-  canvas.width = w;
-  canvas.height = h;
-
-  // 1. Fundo do Card (Fundo Escuro Cyberpunk)
-  ctx.fillStyle = isDir ? 'rgba(6, 11, 25, 0.95)' : 'rgba(10, 16, 31, 0.88)';
-  roundRect(ctx, 1, 1, w - 2, h - 2, 8);
-  ctx.fill();
-
-  // 2. Borda Neon (Cor da Categoria Funcional do Nó)
-  ctx.strokeStyle = borderColor || '#38bdf8';
-  ctx.lineWidth = isDir ? 3.5 : 2.0;
-  roundRect(ctx, 2, 2, w - 4, h - 4, 7);
-  ctx.stroke();
-
-  // 3. Texto do Título
-  ctx.font = font;
-  ctx.fillStyle = '#ffffff';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(truncatedText, padX, h / 2);
-
-  // Conversão para CanvasTexture do Three.js
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-
-  const aspect = w / h;
-  const worldH = isDir ? 11 : 6.5;
-  const worldW = worldH * aspect;
-
-  return { tex, worldW, worldH };
-}
-
-/**
- * Componente individual de Card Flutuante de Nó via Sprite nativo do Three.js
- * (Desempenho 60 FPS: 1 Draw Call simples por sprite, com suporte a transição de opacidade Hide-on-Pan)
- */
-function LabelCard({ node, opacityRef }) {
-  const isDir = node.type === 'dir' || node.isDir;
-  const cardBorderColor = node.color || (isDir ? '#38bdf8' : '#f472b6');
-  const matRef = useRef();
-
-  // Gera a textura do card
-  const labelGfx = useMemo(() => {
-    const titleText = node.name || node.id || '';
-    return makeLabelTexture(titleText, cardBorderColor, isDir);
-  }, [node.name, node.id, cardBorderColor, isDir]);
-
-  // Limpeza de memória da textura ao desmontar
-  useEffect(() => {
-    return () => {
-      if (labelGfx?.tex) labelGfx.tex.dispose();
-    };
-  }, [labelGfx]);
-
-  // Sincroniza opacidade contínua do sprite via useFrame sem disparar re-renders no React
-  useFrame(() => {
-    if (matRef.current && opacityRef) {
-      const targetOp = opacityRef.current * 0.96;
-      if (Math.abs(matRef.current.opacity - targetOp) > 0.01) {
-        matRef.current.opacity = targetOp;
-        matRef.current.visible = targetOp > 0.05;
-      }
-    }
-  });
-
-  if (!labelGfx) return null;
-
-  // Altura Y Dinâmica: posY = y + raioDoNó + margem
-  // Para pastas: geometria r=2.0 multiplicada pela escala (7.5 a 10.5) = raio de 15 a 21 + margem de respiro (8)
-  // Para arquivos: geometria r=1.5 multiplicada pela escala (3.2) = raio de ~4.8 + margem de respiro (4.5)
-  const nodeRadius = isDir
-    ? 2.0 * (7.5 + Math.max(0, 4 - (node.depth || 0)) * 0.75)
-    : 1.5 * 3.2;
-  const margin = isDir ? 8 : 4.5;
+function NativeLabelText({ node, isDir = false, opacity = 1 }) {
+  const isRootNode = Boolean(node.isRoot || node.depth === 0 || node.id === 'root');
+  
+  // Altura Y Dinâmica: posiciona o texto elegantemente acima da esfera sem colidir
+  const dirScale = isRootNode ? 14.0 : (7.5 + Math.max(0, 4 - (node.depth || 0)) * 0.75);
+  const nodeRadius = isDir ? 2.0 * dirScale : 1.5 * 3.2;
+  const margin = isRootNode ? 12 : (isDir ? 8 : 4.5);
   const posY = (node.y || 0) + nodeRadius + margin;
+
+  // Cores de texto e outline baseadas na categoria
+  const mainColor = isRootNode
+    ? '#fef08a'
+    : isDir
+    ? '#38bdf8'
+    : (node.color || '#f472b6');
+
+  const displayText = isRootNode
+    ? `☀️ ${String(node.name || node.id).toUpperCase()}`
+    : isDir
+    ? `📁 ${String(node.name || node.id).toUpperCase()}`
+    : String(node.name || node.id);
+
+  const fontSize = isRootNode ? 5.5 : isDir ? 3.8 : 2.2;
 
   const handleClick = (e) => {
     e.stopPropagation();
@@ -127,29 +42,31 @@ function LabelCard({ node, opacityRef }) {
   };
 
   return (
-    <sprite
-      position={[node.x || 0, posY, node.z || 0]}
-      scale={[labelGfx.worldW, labelGfx.worldH, 1]}
-      renderOrder={2}
-      onClick={handleClick}
-      onPointerOver={(e) => {
-        e.stopPropagation();
-        document.body.style.cursor = 'pointer';
-        useAppStore.getState().setHoveredNode(node);
-      }}
-      onPointerOut={() => {
-        document.body.style.cursor = 'auto';
-        useAppStore.getState().setHoveredNode(null);
-      }}
-    >
-      <spriteMaterial
-        ref={matRef}
-        map={labelGfx.tex}
-        transparent={true}
-        opacity={0.96}
+    <Billboard position={[node.x || 0, posY, node.z || 0]}>
+      <Text
+        text={displayText}
+        fontSize={fontSize}
+        color={mainColor}
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={fontSize * 0.1}
+        outlineColor="#070a12"
+        outlineOpacity={opacity * 0.9}
+        fillOpacity={opacity}
+        renderOrder={2}
         depthWrite={false}
+        onClick={handleClick}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          document.body.style.cursor = 'pointer';
+          useAppStore.getState().setHoveredNode(node);
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = 'auto';
+          useAppStore.getState().setHoveredNode(null);
+        }}
       />
-    </sprite>
+    </Billboard>
   );
 }
 
@@ -272,20 +189,20 @@ export default function LabelsRender({ nodes = [] }) {
 
   return (
     <group>
-      {/* Rótulos das Pastas (Âncoras - Cubos) */}
+      {/* Rótulos das Pastas (Âncoras - Texto Nativo WebGL GPU) */}
       {showFolderLabels && (
         <group ref={dirGroupRef}>
           {dirNodes.slice(0, 300).map((node) => (
-            <LabelCard key={node.id} node={node} opacityRef={opacityRef} />
+            <NativeLabelText key={node.id} node={node} isDir={true} opacity={0.95} />
           ))}
         </group>
       )}
 
-      {/* Rótulos dos Arquivos (Esferas / Bolinhas mais próximas com Cap de 150~250) */}
+      {/* Rótulos dos Arquivos (Esferas / Bolinhas mais próximas com Cap inteligente) */}
       {showFileLabels && (
         <group ref={fileGroupRef}>
           {activeFileNodes.map((node) => (
-            <LabelCard key={node.id} node={node} opacityRef={opacityRef} />
+            <NativeLabelText key={node.id} node={node} isDir={false} opacity={0.88} />
           ))}
         </group>
       )}

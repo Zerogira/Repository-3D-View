@@ -100,11 +100,13 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
   calculateWeights(rootNode.id);
 
   // 4. Calcula Profundidade (BFS) e Herança de Cores por Ramo (Branch Coloring)
-  // Direct children of root divide 360° chromatic circle
+  // O nó raiz é o Sol central do sistema: amarelo estelar vibrante
   const rootChildren = rootNode.children || [];
   const totalRootBranches = Math.max(1, rootChildren.length);
   
-  rootNode.branchColor = '#ffffff';
+  rootNode.isRoot = true;
+  rootNode.branchColor = '#facc15'; // Amarelo Dourado Sol Solar
+  rootNode.color = '#facc15';
   rootNode.depth = 0;
 
   rootChildren.forEach((childId, idx) => {
@@ -333,6 +335,7 @@ export function computeUniverseLayout(rawNodes, rawLinks) {
       const countInThisRing = Math.min(filesPerRing, fileCount - filesPlaced);
 
       orbitRings.push({
+        parentId: parent.id,
         x: parent.x || 0,
         y: parent.y || 0,
         z: parent.z || 0,

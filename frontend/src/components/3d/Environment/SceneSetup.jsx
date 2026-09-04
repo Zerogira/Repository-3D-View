@@ -58,8 +58,8 @@ export default function SceneSetup({
 
   return (
     <>
-      {/* Nevoeiro Linear Dinâmico: Ajustado automaticamente ao raio do nó mais distante do repositório */}
-      <fog attach="fog" args={['#070a12', fogStart, fogEnd]} />
+      {/* Nevoeiro Cibernético: Horizonte estendido para não cortar a visão da galáxia */}
+      <fog attach="fog" args={['#070a12', Math.min(fogStart, 500), Math.max(fogEnd, 20000)]} />
 
       {/* Iluminação Cibernética */}
       <ambientLight intensity={0.6} />
@@ -74,15 +74,15 @@ export default function SceneSetup({
       <pointLight position={[-150, 100, -150]} intensity={1.5} color="#22d3ee" distance={500} />
       <pointLight position={[150, 100, 150]} intensity={1.5} color="#ec4899" distance={500} />
 
-      {/* Trava Físico-Câmera Dinâmica: maxDistance e maxPolarAngle permitindo ver a cascata vertical */}
+      {/* OrbitControls sem travas artificiais de zoom para navegação macro/micro total */}
       <OrbitControls
         ref={controlsRef}
         makeDefault
         enableDamping
         dampingFactor={0.05}
         maxPolarAngle={Math.PI * 0.85}
-        minDistance={10}
-        maxDistance={maxCameraDistance}
+        minDistance={5}
+        maxDistance={25000}
         autoRotate={autoRotate}
         autoRotateSpeed={0.8}
         onStart={() => setIsMovingCamera(true)}
