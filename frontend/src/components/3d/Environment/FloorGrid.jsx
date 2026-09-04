@@ -9,13 +9,13 @@ import React from 'react';
  */
 export default function FloorGrid({ minY = 0, gridRadius = 20000 }) {
   const floorHeight = minY - 25;
-  // Piso massivo garantindo que o grafo nunca ultrapasse o chão (args=[20000, 200])
+  // Piso massivo garantindo que o grafo nunca ultrapasse o chão (80 divisões ideais para alta taxa de quadros)
   const actualRadius = Math.max(gridRadius, 20000);
-  const divisions = 200;
+  const divisions = 80;
 
   return (
     <group position={[0, floorHeight, 0]}>
-      {/* GridHelper Nativo de Alta Escala: Cobre todo o espaço de dispersão física */}
+      {/* GridHelper Nativo de Alta Escala Otimizado */}
       <gridHelper
         args={[actualRadius, divisions, '#06b6d4', '#1e293b']}
         position={[0, 0, 0]}

@@ -105,100 +105,97 @@ export default function LabelsRender({ nodes = [] }) {
     return { dirNodes: dirs, fileNodes: files };
   }, [nodes]);
 
-  // 1. LOD Dinâmico adaptado ao porte do projeto:
+  // 1. LOD Dinâmico e Cap de Textos:
+  // Reduz drasticamente Draw Calls da GPU mostrando apenas o que a câmera consegue ler
   const fileLodThreshold = useMemo(() => {
     const totalFiles = fileNodes.length;
-    if (totalFiles > 800) return 550;
-    if (totalFiles > 300) return 750;
-    return 1100;
+    if (totalFiles > 500) return 400;
+    if (totalFiles > 200) return 600;
+    return 800;
   }, [fileNodes.length]);
 
-  // Limite máximo de arquivos simultâneos na tela (Cap inteligente de segurança)
-  const maxFileCards = useMemo(() => {
-    return fileNodes.length > 800 ? 150 : 250;
-  }, [fileNodes.length]);
+  // Limite máximo de arquivos simultâneos na tela (Cap rigoroso: máximo 40 textos mais próximos)
+  const maxFileCards = 40;
 
-  // Estado dos nós de arquivos visíveis
+  // Estado dos nós de arquivos visíveis e pastas próximas
   const [activeFileNodes, setActiveFileNodes] = React.useState([]);
+  const [activeDirNodes, setActiveDirNodes] = React.useState([]);
   const lastCameraPos = useRef(new THREE.Vector3(Infinity, Infinity, Infinity));
 
   // LOD Inteligente e Frustum Culling Dinâmico na GPU/Frame + Transição Hide-on-Pan
   useFrame((state, delta) => {
     // Transição suave de opacidade (Fade-out quando movendo a câmera, Fade-in ao parar)
     const target = isMovingCamera ? 0 : 1;
-    const speed = isMovingCamera ? 8 : 4; // Fade out mais rápido para liberar a GPU imediatamente
+    const speed = isMovingCamera ? 8 : 4;
     opacityRef.current = THREE.MathUtils.damp(opacityRef.current, target, speed, delta);
 
-    // Se estiver movendo a câmera ativamente com opacidade zero, pula o cálculo espacial para liberar a CPU
     if (isMovingCamera && opacityRef.current < 0.05) {
       return;
     }
 
-    const cameraDistCenter = state.camera.position.distanceTo(centerVector);
-
-    // Controle de visibilidade das Pastas
-    if (dirGroupRef.current) {
-      const isDirVisible = showFolderLabels && cameraDistCenter < 3500;
-      if (dirGroupRef.current.visible !== isDirVisible) {
-        dirGroupRef.current.visible = isDirVisible;
-      }
-    }
-
-    // Se arquivos estiverem desativados ou lista vazia, esconde o grupo
-    if (!showFileLabels || fileNodes.length === 0) {
-      if (fileGroupRef.current && fileGroupRef.current.visible) {
-        fileGroupRef.current.visible = false;
-      }
-      return;
-    }
-
-    if (fileGroupRef.current && !fileGroupRef.current.visible) {
-      fileGroupRef.current.visible = true;
-    }
-
-    // Só recalcula os arquivos mais próximos se a câmera moveu mais de 35 unidades e parou
     const distCamMoved = state.camera.position.distanceTo(lastCameraPos.current);
-    if (distCamMoved > 35) {
+    if (distCamMoved > 25) {
       lastCameraPos.current.copy(state.camera.position);
 
       const camX = state.camera.position.x;
       const camY = state.camera.position.y;
       const camZ = state.camera.position.z;
 
-      // Filtra arquivos dentro do raio do LOD atual e ordena pelos mais próximos da câmera
-      const nearbyFiles = [];
-      for (let i = 0; i < fileNodes.length; i++) {
-        const fn = fileNodes[i];
-        const dx = (fn.x || 0) - camX;
-        const dy = (fn.y || 0) - camY;
-        const dz = (fn.z || 0) - camZ;
+      // 1. Pastas Próximas (LOD de Pastas: Raiz sempre visível + até 30 pastas mais próximas)
+      const nearbyDirs = [];
+      for (let i = 0; i < dirNodes.length; i++) {
+        const dn = dirNodes[i];
+        if (dn.isRoot || dn.depth === 0 || dn.id === 'root') {
+          nearbyDirs.push({ node: dn, distSq: -1 }); // Sol sempre visível
+          continue;
+        }
+        const dx = (dn.x || 0) - camX;
+        const dy = (dn.y || 0) - camY;
+        const dz = (dn.z || 0) - camZ;
         const distSq = dx * dx + dy * dy + dz * dz;
 
-        if (distSq < fileLodThreshold * fileLodThreshold) {
-          nearbyFiles.push({ node: fn, distSq });
+        // Limite de visão de pastas em 1500 unidades
+        if (distSq < 1500 * 1500) {
+          nearbyDirs.push({ node: dn, distSq });
         }
       }
+      nearbyDirs.sort((a, b) => a.distSq - b.distSq);
+      setActiveDirNodes(nearbyDirs.slice(0, 35).map((d) => d.node));
 
-      // Ordena pelos mais próximos e aplica o teto (Cap)
-      nearbyFiles.sort((a, b) => a.distSq - b.distSq);
-      const selected = nearbyFiles.slice(0, maxFileCards).map((item) => item.node);
+      // 2. Arquivos Próximos (LOD de Arquivos com teto de 40)
+      if (showFileLabels && fileNodes.length > 0) {
+        const nearbyFiles = [];
+        for (let i = 0; i < fileNodes.length; i++) {
+          const fn = fileNodes[i];
+          const dx = (fn.x || 0) - camX;
+          const dy = (fn.y || 0) - camY;
+          const dz = (fn.z || 0) - camZ;
+          const distSq = dx * dx + dy * dy + dz * dz;
 
-      setActiveFileNodes(selected);
+          if (distSq < fileLodThreshold * fileLodThreshold) {
+            nearbyFiles.push({ node: fn, distSq });
+          }
+        }
+        nearbyFiles.sort((a, b) => a.distSq - b.distSq);
+        setActiveFileNodes(nearbyFiles.slice(0, maxFileCards).map((item) => item.node));
+      } else {
+        setActiveFileNodes([]);
+      }
     }
   });
 
   return (
     <group>
-      {/* Rótulos das Pastas (Âncoras - Texto Nativo WebGL GPU) */}
+      {/* Rótulos das Pastas (Apenas Sol + Pastas no foco da câmera: ~10 a 35 Draw Calls) */}
       {showFolderLabels && (
         <group ref={dirGroupRef}>
-          {dirNodes.slice(0, 300).map((node) => (
+          {activeDirNodes.map((node) => (
             <NativeLabelText key={node.id} node={node} isDir={true} opacity={0.95} />
           ))}
         </group>
       )}
 
-      {/* Rótulos dos Arquivos (Esferas / Bolinhas mais próximas com Cap inteligente) */}
+      {/* Rótulos dos Arquivos (Apenas os arquivos no foco imediato: ~10 a 40 Draw Calls) */}
       {showFileLabels && (
         <group ref={fileGroupRef}>
           {activeFileNodes.map((node) => (

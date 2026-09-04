@@ -61,14 +61,11 @@ export default function SceneSetup({
       {/* Nevoeiro Cibernético: Horizonte estendido para não cortar a visão da galáxia */}
       <fog attach="fog" args={['#070a12', Math.min(fogStart, 500), Math.max(fogEnd, 20000)]} />
 
-      {/* Iluminação Cibernética */}
+      {/* Iluminação Cibernética (Otimizada para alta taxa de quadros) */}
       <ambientLight intensity={0.6} />
       <directionalLight
         position={[100, 200, 100]}
         intensity={1.2}
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
       />
       {/* Luzes de Acento Neon (Ciano e Rosa) */}
       <pointLight position={[-150, 100, -150]} intensity={1.5} color="#22d3ee" distance={500} />

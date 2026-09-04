@@ -12,93 +12,60 @@ import { Line } from '@react-three/drei';
  *    combinando perfeitamente com a cor do ramo para manter alta performance a 60 FPS.
  */
 export default function EdgesRender({ nodes = [], links = [] }) {
-  // Separa as conexões entre pastas e arquivos
-  const { folderLinks, filePositions, fileColors } = useMemo(() => {
+  // Geometria Única Consolidada: Compila conexões de Troncos (Pastas) e Arquivos
+  // em 1 Single Draw Call nativo via THREE.BufferGeometry + lineSegments
+  const { geometry, hasLinks } = useMemo(() => {
     if (!nodes.length || !links.length) {
-      return { folderLinks: [], filePositions: new Float32Array(0), fileColors: new Float32Array(0) };
+      return { geometry: null, hasLinks: false };
     }
 
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-    const folderList = [];
-    const filePosList = [];
-    const fileColList = [];
+    const posList = [];
+    const colList = [];
     const tempColor = new THREE.Color();
 
     links.forEach((link) => {
       const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
       const targetId = typeof link.target === 'object' ? link.target.id : link.target;
 
-      const sourceNode = nodeMap.get(sourceId);
-      const targetNode = nodeMap.get(targetId);
+      const sNode = nodeMap.get(sourceId);
+      const tNode = nodeMap.get(targetId);
 
-      if (sourceNode && targetNode) {
-        const isTargetFile = targetNode.type !== 'dir' && !targetNode.isDir;
+      if (sNode && tNode) {
+        // Pontos de início e fim
+        posList.push(sNode.x || 0, sNode.y || 0, sNode.z || 0);
+        posList.push(tNode.x || 0, tNode.y || 0, tNode.z || 0);
 
-        if (isTargetFile) {
-          filePosList.push(sourceNode.x || 0, sourceNode.y || 0, sourceNode.z || 0);
-          filePosList.push(targetNode.x || 0, targetNode.y || 0, targetNode.z || 0);
+        // Cor temática herdada do ramo de destino ou do nó
+        const colorHex = tNode.branchColor || tNode.color || '#38bdf8';
+        tempColor.set(colorHex);
 
-          const colorHex = targetNode.branchColor || targetNode.color || '#38bdf8';
-          tempColor.set(colorHex);
-          fileColList.push(tempColor.r, tempColor.g, tempColor.b);
-          fileColList.push(tempColor.r, tempColor.g, tempColor.b);
-        } else {
-          // Conexão Pasta -> Pasta
-          const p1 = [sourceNode.x || 0, sourceNode.y || 0, sourceNode.z || 0];
-          const p2 = [targetNode.x || 0, targetNode.y || 0, targetNode.z || 0];
-          const color = targetNode.branchColor || targetNode.color || '#ffffff';
-          folderList.push({
-            id: `${sourceId}-${targetId}`,
-            points: [p1, p2],
-            color,
-          });
-        }
+        colList.push(tempColor.r, tempColor.g, tempColor.b);
+        colList.push(tempColor.r, tempColor.g, tempColor.b);
       }
     });
 
-    return {
-      folderLinks: folderList,
-      filePositions: new Float32Array(filePosList),
-      fileColors: new Float32Array(fileColList),
-    };
+    if (posList.length === 0) return { geometry: null, hasLinks: false };
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posList), 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colList), 3));
+
+    return { geometry: geom, hasLinks: true };
   }, [nodes, links]);
 
-  // Geometria para as conexões dos Pilares de Arquivos com Vertex Colors
-  const fileGeometry = useMemo(() => {
-    if (filePositions.length === 0) return null;
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.BufferAttribute(filePositions, 3));
-    geom.setAttribute('color', new THREE.BufferAttribute(fileColors, 3));
-    return geom;
-  }, [filePositions, fileColors]);
+  if (!hasLinks || !geometry) return null;
 
   return (
-    <group>
-      {/* 1. Conexões de Tronco / Ramos Principais (Fios laser ultrafinos e precisos) */}
-      {folderLinks.map((fLink) => (
-        <Line
-          key={fLink.id}
-          points={fLink.points}
-          color={fLink.color}
-          lineWidth={0.8}
-          transparent
-          opacity={0.55}
-          depthWrite={false}
-        />
-      ))}
-
-      {/* 2. Conexões dos Arquivos: Fios finos coloridos por vértice na paleta de cada galho */}
-      {fileGeometry && (
-        <lineSegments geometry={fileGeometry}>
-          <lineBasicMaterial
-            vertexColors={true}
-            transparent={true}
-            opacity={0.35}
-            linewidth={1}
-            depthWrite={false}
-          />
-        </lineSegments>
-      )}
-    </group>
+    // 1 Single Draw Call para TODAS as conexões da galáxia (Troncos + Folhas)
+    <lineSegments geometry={geometry}>
+      <lineBasicMaterial
+        vertexColors={true}
+        transparent={true}
+        opacity={0.45}
+        linewidth={1}
+        depthWrite={false}
+      />
+    </lineSegments>
   );
 }

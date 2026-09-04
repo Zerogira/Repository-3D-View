@@ -231,7 +231,7 @@ export default function NodesRender({ nodes = [] }) {
 
   return (
     <group>
-      {/* 1. InstancedMesh para Diretórios (Bolinhas Sólidas Grandes Ciano Elétrico) */}
+      {/* 1. InstancedMesh para Diretórios (Bolinhas Sólidas Ciano Elétrico Otimizadas) */}
       {dirNodes.length > 0 && (
         <instancedMesh
           ref={dirMeshRef}
@@ -240,14 +240,14 @@ export default function NodesRender({ nodes = [] }) {
           onPointerOver={handleDirPointerOver}
           onPointerOut={handleDirPointerOut}
         >
-          <sphereGeometry args={[2.0, 24, 24]} />
+          <sphereGeometry args={[2.0, 14, 14]} />
           <meshBasicMaterial
             toneMapped={false}
           />
         </instancedMesh>
       )}
 
-      {/* 2. InstancedMesh para Arquivos (Poeira Estelar Holográfica Sci-Fi com Additive Blending) */}
+      {/* 2. InstancedMesh para Arquivos (Poeira Estelar Holográfica Sci-Fi Otimizada) */}
       {showFileGeometry && fileNodes.length > 0 && (
         <instancedMesh
           ref={fileMeshRef}
@@ -256,7 +256,7 @@ export default function NodesRender({ nodes = [] }) {
           onPointerOver={handleFilePointerOver}
           onPointerOut={handleFilePointerOut}
         >
-          <sphereGeometry args={[0.8, 16, 16]} />
+          <sphereGeometry args={[0.8, 10, 10]} />
           <meshBasicMaterial
             transparent={true}
             opacity={0.65}

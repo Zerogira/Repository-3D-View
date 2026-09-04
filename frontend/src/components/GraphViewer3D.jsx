@@ -157,10 +157,9 @@ export default function GraphViewer3D({
         </div>
       ) : null}
 
-      {/* Canvas Principal do React Three Fiber */}
+      {/* Canvas Principal do React Three Fiber (Otimizado: sem passes pesados de sombra) */}
       <div className="w-full h-full">
         <Canvas
-          shadows
           camera={{ position: [0, 220, 450], fov: 50, near: 1, far: 20000 }}
           gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
           onCreated={({ gl }) => {
