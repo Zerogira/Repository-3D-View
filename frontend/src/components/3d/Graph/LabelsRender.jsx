@@ -84,6 +84,8 @@ export default function LabelsRender({ nodes = [] }) {
   const showFolderLabels = useAppStore((s) => s.showFolderLabels);
   const showFileLabels = useAppStore((s) => s.showFileLabels);
   const isMovingCamera = useAppStore((s) => s.isMovingCamera);
+  const focusedFolder = useAppStore((s) => s.focusedFolder);
+  const hoveredNode = useAppStore((s) => s.hoveredNode);
 
   const dirGroupRef = useRef();
   const fileGroupRef = useRef();
@@ -105,48 +107,38 @@ export default function LabelsRender({ nodes = [] }) {
     return { dirNodes: dirs, fileNodes: files };
   }, [nodes]);
 
-  // 1. LOD Dinâmico e Cap de Textos:
-  // Reduz drasticamente Draw Calls da GPU mostrando apenas o que a câmera consegue ler
-  const fileLodThreshold = useMemo(() => {
-    const totalFiles = fileNodes.length;
-    if (totalFiles > 500) return 400;
-    if (totalFiles > 200) return 600;
-    return 800;
-  }, [fileNodes.length]);
-
-  // Limite máximo de arquivos simultâneos na tela (Cap rigoroso: máximo 40 textos mais próximos)
-  const maxFileCards = 40;
-
-  // Estado dos nós de arquivos visíveis e pastas próximas
-  const [activeFileNodes, setActiveFileNodes] = React.useState([]);
+  // Estado dos nós de pastas visíveis (LOD de pastas)
   const [activeDirNodes, setActiveDirNodes] = React.useState([]);
   const lastCameraPos = useRef(new THREE.Vector3(Infinity, Infinity, Infinity));
 
-  // LOD Inteligente e Frustum Culling Dinâmico na GPU/Frame + Transição Hide-on-Pan
+  // LOD Dinâmico para Diretórios e Hide-on-Pan
+  // Otimizado: NUNCA recalcula nem dispara setActiveDirNodes enquanto a câmera estiver em movimento (isMovingCamera)
   useFrame((state, delta) => {
     // Transição suave de opacidade (Fade-out quando movendo a câmera, Fade-in ao parar)
     const target = isMovingCamera ? 0 : 1;
     const speed = isMovingCamera ? 8 : 4;
     opacityRef.current = THREE.MathUtils.damp(opacityRef.current, target, speed, delta);
 
-    if (isMovingCamera && opacityRef.current < 0.05) {
+    // Se estiver em movimento ou a opacidade ainda estiver baixa, poupa 100% da CPU
+    if (isMovingCamera) {
       return;
     }
 
     const distCamMoved = state.camera.position.distanceTo(lastCameraPos.current);
-    if (distCamMoved > 25) {
+    // Threshold generoso (150 unidades): recalcula apenas quando a câmera realmente se deslocou muito
+    if (distCamMoved > 150) {
       lastCameraPos.current.copy(state.camera.position);
 
       const camX = state.camera.position.x;
       const camY = state.camera.position.y;
       const camZ = state.camera.position.z;
 
-      // 1. Pastas Próximas (LOD de Pastas: Raiz sempre visível + até 30 pastas mais próximas)
+      // Pastas: Raiz sempre visível + até 30 pastas mais próximas
       const nearbyDirs = [];
       for (let i = 0; i < dirNodes.length; i++) {
         const dn = dirNodes[i];
         if (dn.isRoot || dn.depth === 0 || dn.id === 'root') {
-          nearbyDirs.push({ node: dn, distSq: -1 }); // Sol sempre visível
+          nearbyDirs.push({ node: dn, distSq: -1 });
           continue;
         }
         const dx = (dn.x || 0) - camX;
@@ -154,39 +146,54 @@ export default function LabelsRender({ nodes = [] }) {
         const dz = (dn.z || 0) - camZ;
         const distSq = dx * dx + dy * dy + dz * dz;
 
-        // Limite de visão de pastas em 1500 unidades
         if (distSq < 1500 * 1500) {
           nearbyDirs.push({ node: dn, distSq });
         }
       }
       nearbyDirs.sort((a, b) => a.distSq - b.distSq);
-      setActiveDirNodes(nearbyDirs.slice(0, 35).map((d) => d.node));
-
-      // 2. Arquivos Próximos (LOD de Arquivos com teto de 40)
-      if (showFileLabels && fileNodes.length > 0) {
-        const nearbyFiles = [];
-        for (let i = 0; i < fileNodes.length; i++) {
-          const fn = fileNodes[i];
-          const dx = (fn.x || 0) - camX;
-          const dy = (fn.y || 0) - camY;
-          const dz = (fn.z || 0) - camZ;
-          const distSq = dx * dx + dy * dy + dz * dz;
-
-          if (distSq < fileLodThreshold * fileLodThreshold) {
-            nearbyFiles.push({ node: fn, distSq });
-          }
-        }
-        nearbyFiles.sort((a, b) => a.distSq - b.distSq);
-        setActiveFileNodes(nearbyFiles.slice(0, maxFileCards).map((item) => item.node));
-      } else {
-        setActiveFileNodes([]);
-      }
+      setActiveDirNodes(nearbyDirs.slice(0, 30).map((d) => d.node));
     }
   });
 
+  // Modo Foco + Hover para Arquivos:
+  // Zero poluição visual: arquivos só têm rótulo se forem filhos da pasta em foco OU sob o cursor (hover)
+  const visibleFileNodes = useMemo(() => {
+    if (!showFileLabels) return [];
+
+    const result = [];
+    const hoveredIsFile = hoveredNode && !hoveredNode.isDir && hoveredNode.type !== 'dir';
+
+    if (hoveredIsFile) {
+      result.push(hoveredNode);
+    }
+
+    if (focusedFolder) {
+      const folderId = focusedFolder.id;
+      const folderPath = focusedFolder.path || focusedFolder.id;
+
+      for (let i = 0; i < fileNodes.length; i++) {
+        const f = fileNodes[i];
+        if (hoveredIsFile && f.id === hoveredNode.id) continue;
+
+        // Verifica se é filho direto pelo parent ID ou pelo prefixo do caminho
+        const isChild =
+          f.parent === folderId ||
+          (f.parentId && f.parentId === folderId) ||
+          (f.path && f.path.startsWith(folderPath + '/'));
+
+        if (isChild) {
+          result.push(f);
+          if (result.length >= 50) break; // Trava de segurança para pastas gigantes
+        }
+      }
+    }
+
+    return result;
+  }, [showFileLabels, focusedFolder, hoveredNode, fileNodes]);
+
   return (
     <group>
-      {/* Rótulos das Pastas (Apenas Sol + Pastas no foco da câmera: ~10 a 35 Draw Calls) */}
+      {/* Rótulos das Pastas (Marcos de navegação: Sol + pastas próximas) */}
       {showFolderLabels && (
         <group ref={dirGroupRef}>
           {activeDirNodes.map((node) => (
@@ -195,11 +202,11 @@ export default function LabelsRender({ nodes = [] }) {
         </group>
       )}
 
-      {/* Rótulos dos Arquivos (Apenas os arquivos no foco imediato: ~10 a 40 Draw Calls) */}
-      {showFileLabels && (
+      {/* Rótulos dos Arquivos (Modo Foco: Apenas da pasta ativa + arquivo sob hover) */}
+      {showFileLabels && visibleFileNodes.length > 0 && (
         <group ref={fileGroupRef}>
-          {activeFileNodes.map((node) => (
-            <NativeLabelText key={node.id} node={node} isDir={false} opacity={0.88} />
+          {visibleFileNodes.map((node) => (
+            <NativeLabelText key={node.id} node={node} isDir={false} opacity={0.95} />
           ))}
         </group>
       )}

@@ -28,7 +28,19 @@ export const useAppStore = create((set) => ({
 
   // Nó selecionado no grafo
   selectedNode: null,
-  setSelectedNode: (node) => set({ selectedNode: node }),
+  setSelectedNode: (node) =>
+    set((state) => {
+      // Se selecionou uma pasta/diretório, automaticamente ativa ela como pasta em foco
+      const isDir = node && (node.type === 'dir' || node.isDir);
+      return {
+        selectedNode: node,
+        focusedFolder: isDir ? node : (node ? state.focusedFolder : null),
+      };
+    }),
+
+  // Pasta em foco (Modo Foco: exibe apenas os rótulos de arquivos desta pasta)
+  focusedFolder: null,
+  setFocusedFolder: (folder) => set({ focusedFolder: folder }),
 
   // Nó em hover no grafo (reação física de escala e glow)
   hoveredNode: null,
@@ -39,17 +51,36 @@ export const useAppStore = create((set) => ({
   setIsSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
   toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
 
-  // Predefinição de Layout 3D Ativo ('classic' = Galaxy Clássico | 'universe' = Universo / Órbitas)
+  // Predefinição de Layout 3D Oficial ('classic' | 'solar' | 'quantum')
   layoutMode: 'classic',
-  setLayoutMode: (mode) => set({ layoutMode: mode, activeLayout: mode }),
-  // Alias de compatibilidade
+  setLayoutMode: (mode) => set({ 
+    layoutMode: mode, 
+    activeLayout: mode,
+    usePhysicsEngine: mode === 'quantum',
+  }),
+  // Aliases de compatibilidade
   activeLayout: 'classic',
-  setActiveLayout: (mode) => set({ layoutMode: mode, activeLayout: mode }),
+  setActiveLayout: (mode) => set({ 
+    layoutMode: mode, 
+    activeLayout: mode,
+    usePhysicsEngine: mode === 'quantum',
+  }),
 
-  // Motor de Física 3D (BETA: d3-force-3d)
+  // Compatibilidade legada para toggle (se acionado, alterna entre 'quantum' e 'classic')
   usePhysicsEngine: false,
-  setUsePhysicsEngine: (status) => set({ usePhysicsEngine: status }),
-  toggleUsePhysicsEngine: () => set((state) => ({ usePhysicsEngine: !state.usePhysicsEngine })),
+  setUsePhysicsEngine: (status) => set({ 
+    usePhysicsEngine: status, 
+    layoutMode: status ? 'quantum' : 'classic',
+    activeLayout: status ? 'quantum' : 'classic',
+  }),
+  toggleUsePhysicsEngine: () => set((state) => {
+    const nextStatus = !state.usePhysicsEngine;
+    return {
+      usePhysicsEngine: nextStatus,
+      layoutMode: nextStatus ? 'quantum' : 'classic',
+      activeLayout: nextStatus ? 'quantum' : 'classic',
+    };
+  }),
 
   // Toggles de Recursos Visuais 3D
   showEdges: true,

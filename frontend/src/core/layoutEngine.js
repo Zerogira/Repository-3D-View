@@ -399,3 +399,244 @@ export function computeUniverseLayout(rawNodes, rawLinks) {
     },
   };
 }
+
+/**
+ * =============================================================================
+ * GALAXY SOLAR (Radial Tree 2.5D - Sistema Solar Trigonométrico Plano)
+ * =============================================================================
+ * - Raiz no centro exato: X: 0, Y: 0, Z: 0.
+ * - Profundidade dita o raio orbital: radius = depth * 55 (com espaçamento progressivo).
+ * - Eixo Y quase plano com ruído sutil anti Z-fighting: Y = (Math.random() - 0.5) * 8.
+ * - Distribuição trigonométrica em leque/pizza sem cruzamento de galhos.
+ * - Herança de Cor Estrita: Filhos diretos da raiz (Nível 1) ganham matiz única HSL 360°,
+ *   e todos os subdiretórios e arquivos descendentes herdam a mesma cor do seu setor.
+ * - Arquivos folha formam anéis/aglomerados orbitais próximos de sua respectiva pasta pai.
+ */
+export function computeSolarLayout(rawNodes, rawLinks) {
+  if (!Array.isArray(rawNodes) || rawNodes.length === 0) {
+    return { nodes: [], links: [] };
+  }
+
+  // 1. Mapeamento de nós básicos
+  const nodeMap = new Map(
+    rawNodes.map((node) => {
+      const isDir = node.type === 'dir' || node.type === 'folder';
+      return [
+        node.id,
+        {
+          ...node,
+          isDir,
+          children: [],
+          depth: 0,
+          weight: 1,
+          fileCount: 0,
+        },
+      ];
+    })
+  );
+
+  // 2. Mapeamento de conexões (Pai -> Filhos)
+  const links = Array.isArray(rawLinks) ? rawLinks : [];
+  links.forEach((link) => {
+    if (!link) return;
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+    if (nodeMap.has(sourceId) && nodeMap.has(targetId)) {
+      nodeMap.get(sourceId).children.push(targetId);
+      nodeMap.get(targetId).parentId = sourceId;
+    }
+  });
+
+  const rootNode = nodeMap.get('root') || Array.from(nodeMap.values())[0];
+  if (!rootNode) return { nodes: [], links: [] };
+
+  // 3. Cálculo de Pesos e Contagem de Arquivos/Subdiretórios
+  function calculateTreeWeights(nodeId) {
+    const node = nodeMap.get(nodeId);
+    if (!node) return 1;
+    let weight = 1;
+    let fileCount = 0;
+
+    node.children.forEach((childId) => {
+      const child = nodeMap.get(childId);
+      if (child) {
+        if (!child.isDir) fileCount++;
+        weight += calculateTreeWeights(childId);
+      }
+    });
+
+    node.weight = weight;
+    node.fileCount = fileCount;
+    return weight;
+  }
+  calculateTreeWeights(rootNode.id);
+
+  // 4. Configuração do Nó Raiz (Sol Central)
+  rootNode.isRoot = true;
+  rootNode.depth = 0;
+  rootNode.x = 0;
+  rootNode.y = 0;
+  rootNode.z = 0;
+  rootNode.color = '#facc15';
+  rootNode.branchColor = '#facc15';
+
+  // 5. Herança Cromática por Setores (Nível 1 define o setor da galáxia)
+  const rootChildren = rootNode.children || [];
+  const level1Folders = rootChildren
+    .map((id) => nodeMap.get(id))
+    .filter((n) => n && n.isDir);
+  const level1Files = rootChildren
+    .map((id) => nodeMap.get(id))
+    .filter((n) => n && !n.isDir);
+
+  const totalSectors = Math.max(1, level1Folders.length);
+
+  // Paleta vibrante e contrastante para os setores planetários
+  level1Folders.forEach((folder, idx) => {
+    const hue = Math.round((idx / totalSectors) * 360);
+    const sectorColor = `hsl(${hue}, 88%, 62%)`;
+    folder.branchColor = sectorColor;
+    folder.color = sectorColor;
+  });
+
+  // Arquivos diretos da raiz ficam dourados/neutros
+  level1Files.forEach((file) => {
+    file.branchColor = '#fef08a';
+    file.color = '#fef08a';
+  });
+
+  // Propagação BFS de profundidade e cor de setor para todos os descendentes
+  const queue = [rootNode];
+  const visited = new Set([rootNode.id]);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    (current.children || []).forEach((childId) => {
+      if (!visited.has(childId)) {
+        const child = nodeMap.get(childId);
+        if (child) {
+          child.depth = current.depth + 1;
+          // Herda estritamente a cor do ramo pai
+          child.branchColor = child.branchColor || current.branchColor || '#38bdf8';
+          child.color = child.branchColor;
+          visited.add(childId);
+          queue.push(child);
+        }
+      }
+    });
+  }
+
+  // 6. Alocação Angular Recursiva em Fatias de Pizza (Radial Tree 2.5D)
+  // Cada nó pai aloca uma fatia angular [startAngle, endAngle] para seus filhos proporcional ao peso
+  const orbitRings = [];
+
+  function layoutSubtree(node, startAngle, endAngle) {
+    const children = (node.children || []).map((id) => nodeMap.get(id)).filter(Boolean);
+    if (!children.length) return;
+
+    const subFolders = children.filter((c) => c.isDir);
+    const subFiles = children.filter((c) => !c.isDir);
+
+    // A. Posicionamento de Subpastas
+    if (subFolders.length > 0) {
+      const totalSubFolderWeight = subFolders.reduce((sum, f) => sum + f.weight, 0);
+      let currentAngle = startAngle;
+      const angleSpan = endAngle - startAngle;
+
+      // Raio orbital da pasta baseado na profundidade (com escala suave para respiro)
+      const baseRadius = node.depth === 0 ? 110 : (node.depth * 80 + 30);
+
+      subFolders.forEach((folder) => {
+        const proportion = totalSubFolderWeight > 0 ? folder.weight / totalSubFolderWeight : 1 / subFolders.length;
+        const childSpan = proportion * angleSpan;
+        const childMidAngle = currentAngle + childSpan / 2;
+
+        const distance = baseRadius;
+        folder.x = Math.cos(childMidAngle) * distance;
+        // Quase plano no Y com ruído sutil anti Z-fighting
+        folder.y = (Math.random() - 0.5) * 8;
+        folder.z = Math.sin(childMidAngle) * distance;
+
+        // Recurso recursivo para a próxima geração
+        layoutSubtree(folder, currentAngle, currentAngle + childSpan);
+        currentAngle += childSpan;
+      });
+    }
+
+    // B. Posicionamento de Arquivos Orbitais Folha (Mini-anéis orbitando a pasta pai)
+    if (subFiles.length > 0) {
+      const fileCount = subFiles.length;
+      // Anéis concêntricos locais logo ao redor da pasta pai
+      const localBaseRadius = Math.max(16, Math.min(45, (fileCount * 2.8) / 1.5));
+      const ringSpacing = 14;
+
+      let filesPlaced = 0;
+      let ringIndex = 0;
+
+      while (filesPlaced < fileCount) {
+        const currentRingRadius = localBaseRadius + ringIndex * ringSpacing;
+        const capacity = Math.max(6, Math.floor((currentRingRadius * Math.PI * 2) / 14));
+        const countInRing = Math.min(capacity, fileCount - filesPlaced);
+
+        orbitRings.push({
+          parentId: node.id,
+          x: node.x || 0,
+          y: node.y || 0,
+          z: node.z || 0,
+          radius: currentRingRadius,
+          color: node.branchColor || node.color || '#38bdf8',
+        });
+
+        for (let i = 0; i < countInRing; i++) {
+          const file = subFiles[filesPlaced + i];
+          const fileAngle = (i / countInRing) * (Math.PI * 2) + (ringIndex * 0.4);
+
+          file.x = (node.x || 0) + Math.cos(fileAngle) * currentRingRadius;
+          file.y = (node.y || 0) + (Math.random() - 0.5) * 6;
+          file.z = (node.z || 0) + Math.sin(fileAngle) * currentRingRadius;
+          file.orbitRadius = currentRingRadius;
+          file.orbitAngle = fileAngle;
+        }
+
+        filesPlaced += countInRing;
+        ringIndex++;
+      }
+    }
+  }
+
+  // Inicia distribuição a 360° a partir do Sol central
+  layoutSubtree(rootNode, 0, Math.PI * 2);
+
+  // 7. Bounding Box e Métricas de Câmera
+  let minY = Infinity;
+  let maxRadius = 0;
+  const nodes = Array.from(nodeMap.values());
+
+  nodes.forEach((node) => {
+    if (typeof node.y === 'number' && node.y < minY) minY = node.y;
+    const r = Math.hypot(node.x || 0, node.z || 0);
+    if (r > maxRadius) maxRadius = r;
+  });
+
+  if (!isFinite(minY)) minY = 0;
+  if (maxRadius < 100) maxRadius = 150;
+
+  const gridRadius = Math.ceil(maxRadius * 2.5);
+  const fogStart = Math.ceil(maxRadius * 1.5);
+  const fogEnd = Math.ceil(maxRadius * 3.5);
+  const maxCameraDistance = Math.ceil(maxRadius * 3.2);
+
+  return {
+    nodes,
+    links,
+    orbitRings,
+    layoutInfo: {
+      minY,
+      maxRadius,
+      gridRadius,
+      fogStart,
+      fogEnd,
+      maxCameraDistance,
+    },
+  };
+}

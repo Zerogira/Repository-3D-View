@@ -157,10 +157,12 @@ export default function GraphViewer3D({
         </div>
       ) : null}
 
-      {/* Canvas Principal do React Three Fiber (Otimizado: sem passes pesados de sombra) */}
+      {/* Canvas Principal do React Three Fiber (Otimizado: dpr={1} para 60 FPS nativo em qualquer monitor, sem sobrecarga de resolução) */}
       <div className="w-full h-full">
         <Canvas
-          camera={{ position: [0, 220, 450], fov: 50, near: 1, far: 20000 }}
+          dpr={1}
+          raycaster={{ params: { Points: { threshold: 0.1 }, Mesh: { threshold: 0.1 } } }}
+          camera={{ position: [0, 220, 450], fov: 50, near: 10, far: 20000 }}
           gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
           onCreated={({ gl }) => {
             gl.setClearColor('#070a12');

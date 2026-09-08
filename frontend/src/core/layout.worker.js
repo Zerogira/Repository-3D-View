@@ -5,30 +5,39 @@
  * em background sem congelar a interface do usuário (60 FPS garantidos).
  */
 import { forceSimulation, forceLink, forceManyBody, forceCenter, forceY, forceRadial } from 'd3-force-3d';
-import { computeCylindricalLayout, computeUniverseLayout } from './layoutEngine.js';
+import { computeCylindricalLayout, computeUniverseLayout, computeSolarLayout } from './layoutEngine.js';
 
 self.onmessage = function (e) {
   const { nodes, links, layout = 'classic', usePhysicsEngine = false } = e.data || {};
 
   try {
-    // 1. Sempre computamos a estrutura base com cores de ramos e profundidades
-    const baseLayout =
-      layout === 'universe'
-        ? computeUniverseLayout(nodes, links)
-        : computeCylindricalLayout(nodes, links);
+    // Oficialização dos 3 modos: 'classic', 'solar' e 'quantum' (física)
+    const activeMode = layout === 'quantum' || usePhysicsEngine ? 'quantum' : (layout === 'solar' ? 'solar' : 'classic');
 
-    // Se o Modo Física (BETA) não estiver ativo, devolve o layout matemático direto
-    if (!usePhysicsEngine) {
+    // 1. Modos Estáticos Matemáticos ('classic' ou 'solar')
+    if (activeMode === 'classic') {
+      const baseLayout = computeCylindricalLayout(nodes, links);
       self.postMessage({
         type: 'SUCCESS',
-        payload: { ...baseLayout, activeLayout: layout },
+        payload: { ...baseLayout, activeLayout: 'classic' },
+      });
+      return;
+    }
+
+    if (activeMode === 'solar') {
+      const solarLayout = computeSolarLayout(nodes, links);
+      self.postMessage({
+        type: 'SUCCESS',
+        payload: { ...solarLayout, activeLayout: 'solar' },
       });
       return;
     }
 
     // ---------------------------------------------------------
-    // MODO FÍSICA 3D (BETA: d3-force-3d em disco galáctico estável)
+    // MODO GALAXY QUANTUM (d3-force-3d em disco galáctico estático)
     // ---------------------------------------------------------
+    // Usa a base do layout solar para herdar cores de setores e profundidades
+    const baseLayout = computeSolarLayout(nodes, links);
     const baseNodes = baseLayout.nodes || [];
     const baseLinks = baseLayout.links || [];
 
@@ -160,7 +169,7 @@ self.onmessage = function (e) {
         nodes: simNodes,
         links: baseLinks,
         orbitRings: updatedOrbitRings,
-        activeLayout: 'physics',
+        activeLayout: 'quantum',
         layoutInfo: {
           minY,
           maxRadius,

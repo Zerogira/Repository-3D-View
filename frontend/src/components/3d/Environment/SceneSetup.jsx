@@ -41,17 +41,35 @@ export default function SceneSetup({
     }
   }, [cameraTarget]);
 
-  // Atualiza periodicamente a visão para o minimapa desenhar o retângulo do viewport
+  const lastViewUpdate = useRef({ time: 0, x: 0, z: 0, camX: 0, camZ: 0 });
+
+  // Sincroniza o minimapa com throttle (~100ms) e threshold de movimento
+  // Elimina re-renders desnecessários do DOM/React 60 vezes por segundo
   useFrame(() => {
-    if (controlsRef.current) {
-      const tgt = controlsRef.current.target;
+    if (!controlsRef.current) return;
+
+    const now = performance.now();
+    if (now - lastViewUpdate.current.time < 100) return; // Limita a ~10 Hz (suficiente para minimapa liso)
+
+    const tgt = controlsRef.current.target;
+    const camX = camera.position.x;
+    const camZ = camera.position.z;
+
+    const dx = tgt.x - lastViewUpdate.current.x;
+    const dz = tgt.z - lastViewUpdate.current.z;
+    const dCamX = camX - lastViewUpdate.current.camX;
+    const dCamZ = camZ - lastViewUpdate.current.camZ;
+
+    // Só atualiza o estado React se a câmera ou o target realmente se moveram
+    if (Math.abs(dx) > 0.5 || Math.abs(dz) > 0.5 || Math.abs(dCamX) > 0.5 || Math.abs(dCamZ) > 0.5) {
+      lastViewUpdate.current = { time: now, x: tgt.x, z: tgt.z, camX, camZ };
       const dist = camera.position.distanceTo(tgt);
       setCameraView({
         x: tgt.x,
         z: tgt.z,
         dist: dist,
-        camX: camera.position.x,
-        camZ: camera.position.z,
+        camX: camX,
+        camZ: camZ,
       });
     }
   });

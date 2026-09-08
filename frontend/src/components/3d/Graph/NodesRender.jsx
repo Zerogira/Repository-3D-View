@@ -189,9 +189,12 @@ export default function NodesRender({ nodes = [] }) {
     }
   };
 
-  // Handlers de Hover para Pastas
+  const isMovingCamera = useAppStore((s) => s.isMovingCamera);
+
+  // Handlers de Hover para Pastas (Ignora se a câmera estiver sendo arrastada ou girando)
   const handleDirPointerOver = useCallback(
     (e) => {
+      if (useAppStore.getState().isMovingCamera) return;
       e.stopPropagation();
       const id = e.instanceId;
       if (id !== undefined && dirNodes[id]) {
@@ -209,9 +212,10 @@ export default function NodesRender({ nodes = [] }) {
     setHoveredNode(null);
   }, [setHoveredNode]);
 
-  // Handlers de Hover para Arquivos
+  // Handlers de Hover para Arquivos (Ignora se a câmera estiver em movimento)
   const handleFilePointerOver = useCallback(
     (e) => {
+      if (useAppStore.getState().isMovingCamera) return;
       e.stopPropagation();
       const id = e.instanceId;
       if (id !== undefined && fileNodes[id]) {
@@ -231,7 +235,7 @@ export default function NodesRender({ nodes = [] }) {
 
   return (
     <group>
-      {/* 1. InstancedMesh para Diretórios (Bolinhas Sólidas Ciano Elétrico Otimizadas) */}
+      {/* 1. InstancedMesh para Diretórios (Ultra Low-Poly 10x8) */}
       {dirNodes.length > 0 && (
         <instancedMesh
           ref={dirMeshRef}
@@ -240,14 +244,14 @@ export default function NodesRender({ nodes = [] }) {
           onPointerOver={handleDirPointerOver}
           onPointerOut={handleDirPointerOut}
         >
-          <sphereGeometry args={[2.0, 14, 14]} />
+          <sphereGeometry args={[2.0, 10, 8]} />
           <meshBasicMaterial
             toneMapped={false}
           />
         </instancedMesh>
       )}
 
-      {/* 2. InstancedMesh para Arquivos (Poeira Estelar Holográfica Sci-Fi Otimizada) */}
+      {/* 2. InstancedMesh para Arquivos (Ultra Low-Poly 8x6: bolinhas grandes e levíssimas) */}
       {showFileGeometry && fileNodes.length > 0 && (
         <instancedMesh
           ref={fileMeshRef}
@@ -256,12 +260,10 @@ export default function NodesRender({ nodes = [] }) {
           onPointerOver={handleFilePointerOver}
           onPointerOut={handleFilePointerOut}
         >
-          <sphereGeometry args={[0.8, 10, 10]} />
+          <sphereGeometry args={[1.6, 8, 6]} />
           <meshBasicMaterial
             transparent={true}
-            opacity={0.65}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
+            opacity={0.8}
             toneMapped={false}
           />
         </instancedMesh>
