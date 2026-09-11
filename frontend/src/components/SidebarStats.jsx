@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FileCode, FolderTree, Star, PieChart, Layers, ChevronRight, ChevronLeft } from 'lucide-react';
+import { FileCode, FolderTree, Star, PieChart, Layers, ChevronRight, ChevronLeft, Sparkles } from 'lucide-react';
 
 /**
  * src/components/SidebarStats.jsx
@@ -8,7 +8,7 @@ import { FileCode, FolderTree, Star, PieChart, Layers, ChevronRight, ChevronLeft
  * Painel de Estatísticas Flutuante em Glassmorphism (Ancorado no Canto Superior Direito).
  * Permite ao usuário recolher o painel para limpar 100% da tela para o 3D.
  */
-export default function SidebarStats({ stats, repoSlug, stars, isTruncated, floating = false }) {
+export default function SidebarStats({ stats, repoSlug, stars, isTruncated, floating = false, superNodeCount = 0 }) {
   const [isOpen, setIsOpen] = useState(true);
 
   if (!stats) return null;
@@ -34,7 +34,7 @@ export default function SidebarStats({ stats, repoSlug, stars, isTruncated, floa
         </div>
       )}
 
-      {/* Grid de Métricas */}
+      {/* Grid de Métricas Principais */}
       <div className="grid grid-cols-2 gap-2">
         <div className="p-2.5 bg-slate-900/60 border border-cyan-500/20 rounded-xl">
           <div className="flex items-center gap-1 text-cyan-400 text-[11px] mb-0.5 font-semibold">
@@ -51,12 +51,25 @@ export default function SidebarStats({ stats, repoSlug, stars, isTruncated, floa
         </div>
       </div>
 
-      <div className="p-2.5 bg-slate-900/60 border border-slate-800/80 rounded-xl flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-xs text-slate-400">
-          <Layers className="w-3.5 h-3.5 text-purple-400" />
-          <span>Profundidade</span>
+      {/* Grid de Profundidade e Super Nós Compilados */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="p-2.5 bg-slate-900/60 border border-slate-800/80 rounded-xl">
+          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+            <Layers className="w-3.5 h-3.5 text-purple-400" />
+            <span>Profundidade</span>
+          </div>
+          <span className="font-bold text-slate-100 text-xs mt-1 block">{stats.max_depth} níveis</span>
         </div>
-        <span className="font-bold text-slate-100 text-xs">{stats.max_depth} níveis</span>
+
+        <div className="p-2.5 bg-slate-900/60 border border-amber-500/30 rounded-xl bg-gradient-to-br from-amber-500/10 to-transparent">
+          <div className="flex items-center gap-1.5 text-xs text-amber-400 font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>Super Nós</span>
+          </div>
+          <span className="font-bold text-amber-300 text-xs mt-1 block">
+            {superNodeCount || stats.super_nodes || 0} compilados
+          </span>
+        </div>
       </div>
 
       {/* Top Extensões */}

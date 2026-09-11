@@ -222,6 +222,33 @@ class GitHubService:
 
                 parent_id = node_id
 
+        # Calcula arquivos diretos por pasta e identifica super nós
+        folder_file_counts: Dict[str, int] = {}
+        for link in links:
+            src = link["source"]
+            tgt = link["target"]
+            tgt_node = nodes_map.get(tgt)
+            if tgt_node and tgt_node.get("type") == "file":
+                folder_file_counts[src] = folder_file_counts.get(src, 0) + 1
+
+        dense_folder_names = {
+            'node_modules', 'dist', 'build', 'vendor', 'packages', 'assets',
+            'static', 'lib', 'docs', 'tests', 'test', 'locale', 'locales',
+            'translations', 'internal'
+        }
+        
+        super_nodes_count = 0
+        for folder_id, f_count in folder_file_counts.items():
+            folder_node = nodes_map.get(folder_id)
+            if not folder_node or folder_id == root_id:
+                continue
+            name_lower = folder_node.get("name", "").lower()
+            threshold = 8 if name_lower in dense_folder_names else 15
+            folder_node["file_count"] = f_count
+            if f_count >= threshold:
+                super_nodes_count += 1
+                folder_node["is_super_node"] = True
+
         # Update folder node values according to child density
         for link in links:
             source_node = nodes_map.get(link["source"])
@@ -246,6 +273,7 @@ class GitHubService:
                 "total_files": total_files,
                 "total_folders": total_folders,
                 "max_depth": max_depth,
+                "super_nodes": super_nodes_count,
                 "top_extensions": sorted_extensions
             }
         }

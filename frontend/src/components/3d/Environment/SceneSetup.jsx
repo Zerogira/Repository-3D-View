@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, GizmoHelper, GizmoViewport } from '@react-three/drei';
+import * as THREE from 'three';
 import FloorGrid from './FloorGrid';
 import { PerformanceStatsTracker } from './PerformanceStatsOverlay';
 import { useAppStore } from '../../../core/store';
@@ -33,23 +34,84 @@ export default function SceneSetup({
   const controlsRef = useRef();
   const { camera } = useThree();
 
-  // Sincroniza o target da câmera sempre que o usuário clica ou arrasta no minimapa
+  const targetLookAt = useRef(new THREE.Vector3());
+  const targetCamPos = useRef(new THREE.Vector3());
+  const isTransitioning = useRef(false);
+
+  // Sincroniza o target e posição da câmera com interpolação suave (Camera Lerp)
   useEffect(() => {
-    if (controlsRef.current && cameraTarget) {
+    if (!controlsRef.current || !cameraTarget) return;
+
+    targetLookAt.current.set(cameraTarget.x || 0, cameraTarget.y || 0, cameraTarget.z || 0);
+
+    // Caso 1: Pan do Minimapa -> Move fisicamente a posição da CÂMERA para a coordenada clicada
+    if (cameraTarget.isMinimapPan) {
+      const currentTarget = controlsRef.current.target;
+      const currentCamPos = camera.position;
+
+      // A nova posição da CÂMERA vai para a coordenada clicada no minimapa (mantendo a altitude Y)
+      const newCamX = cameraTarget.x || 0;
+      const newCamY = currentCamPos.y;
+      const newCamZ = cameraTarget.z || 0;
+
+      // Deslocamento horizontal que a câmera realiza
+      const deltaX = newCamX - currentCamPos.x;
+      const deltaZ = newCamZ - currentCamPos.z;
+
+      // O target translada em paralelo na mesma proporção para a câmera não girar
+      const newTargetX = currentTarget.x + deltaX;
+      const newTargetY = currentTarget.y;
+      const newTargetZ = currentTarget.z + deltaZ;
+
+      targetCamPos.current.set(newCamX, newCamY, newCamZ);
+      targetLookAt.current.set(newTargetX, newTargetY, newTargetZ);
+      isTransitioning.current = true;
+      return;
+    }
+
+    // Caso 2: Se for Super Nó ou foco suave: calcula aproximação isométrica elegante
+    if (cameraTarget.isSuperNode || cameraTarget.smooth) {
+      const offsetDir = new THREE.Vector3().subVectors(camera.position, targetLookAt.current).normalize();
+      if (offsetDir.lengthSq() < 0.01) {
+        offsetDir.set(0.6, 0.4, 0.7).normalize();
+      }
+      // Distância de aproximação ideal para um Super Nó sem colidir
+      const idealDistance = 90;
+      targetCamPos.current.copy(targetLookAt.current).addScaledVector(offsetDir, idealDistance);
+      targetCamPos.current.y = Math.max(targetCamPos.current.y, targetLookAt.current.y + 35);
+
+      isTransitioning.current = true;
+    } else {
       controlsRef.current.target.set(cameraTarget.x || 0, cameraTarget.y || 0, cameraTarget.z || 0);
       controlsRef.current.update();
+      isTransitioning.current = false;
     }
-  }, [cameraTarget]);
+  }, [cameraTarget, camera]);
 
   const lastViewUpdate = useRef({ time: 0, x: 0, z: 0, camX: 0, camZ: 0 });
 
-  // Sincroniza o minimapa com throttle (~100ms) e threshold de movimento
-  // Elimina re-renders desnecessários do DOM/React 60 vezes por segundo
-  useFrame(() => {
+  // Sincroniza a interpolação suave de câmera e o minimapa com throttle (~100ms)
+  useFrame((state, delta) => {
     if (!controlsRef.current) return;
 
+    // Voo de Câmera Suave (Lerp) para o Super Nó
+    if (isTransitioning.current) {
+      const lerpSpeed = Math.min(1, delta * 4.2);
+      controlsRef.current.target.lerp(targetLookAt.current, lerpSpeed);
+      camera.position.lerp(targetCamPos.current, lerpSpeed);
+      controlsRef.current.update();
+
+      const distTarget = controlsRef.current.target.distanceTo(targetLookAt.current);
+      const distCam = camera.position.distanceTo(targetCamPos.current);
+      if (distTarget < 0.5 && distCam < 1.0) {
+        controlsRef.current.target.copy(targetLookAt.current);
+        controlsRef.current.update();
+        isTransitioning.current = false;
+      }
+    }
+
     const now = performance.now();
-    if (now - lastViewUpdate.current.time < 100) return; // Limita a ~10 Hz (suficiente para minimapa liso)
+    if (now - lastViewUpdate.current.time < 100) return; // Limita a ~10 Hz
 
     const tgt = controlsRef.current.target;
     const camX = camera.position.x;
@@ -60,16 +122,18 @@ export default function SceneSetup({
     const dCamX = camX - lastViewUpdate.current.camX;
     const dCamZ = camZ - lastViewUpdate.current.camZ;
 
-    // Só atualiza o estado React se a câmera ou o target realmente se moveram
     if (Math.abs(dx) > 0.5 || Math.abs(dz) > 0.5 || Math.abs(dCamX) > 0.5 || Math.abs(dCamZ) > 0.5) {
       lastViewUpdate.current = { time: now, x: tgt.x, z: tgt.z, camX, camZ };
       const dist = camera.position.distanceTo(tgt);
       setCameraView({
-        x: tgt.x,
-        z: tgt.z,
+        x: camX, // Posição física real da câmera para projeção no minimapa
+        z: camZ,
         dist: dist,
         camX: camX,
         camZ: camZ,
+        tgtX: tgt.x,
+        tgtZ: tgt.z,
+        is2D: false,
       });
     }
   });
@@ -100,7 +164,10 @@ export default function SceneSetup({
         maxDistance={25000}
         autoRotate={autoRotate}
         autoRotateSpeed={0.8}
-        onStart={() => setIsMovingCamera(true)}
+        onStart={() => {
+          isTransitioning.current = false;
+          setIsMovingCamera(true);
+        }}
         onEnd={() => setIsMovingCamera(false)}
       />
 

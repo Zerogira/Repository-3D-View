@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, Key, FolderGit2, Sparkles, History, Trash2, Minimize } from 'lucide-react';
 import Navbar from './components/Navbar';
@@ -8,6 +8,7 @@ import GraphViewer2D from './components/GraphViewer2D';
 import SidebarStats from './components/SidebarStats';
 import NodeDetailsModal from './components/NodeDetailsModal';
 import CodeViewerPanel from './components/CodeViewerPanel';
+import SuperNodeMicroPanel from './components/SuperNodeMicroPanel';
 import TokenModal from './components/TokenModal';
 import BackgroundSwitcher from './components/backgrounds/BackgroundSwitcher';
 import { fetchRepositoryGraph } from './services/api';
@@ -68,6 +69,107 @@ export default function App() {
   // Selected Node state (sincronizado com Zustand para os nós 3D/2D)
   const selectedNode = useAppStore((s) => s.selectedNode);
   const setSelectedNode = useAppStore((s) => s.setSelectedNode);
+  const openSuperNodePanel = useAppStore((s) => s.openSuperNodePanel);
+
+  // Simulação de Super Nó (Fase 1: 10.000 arquivos gerados para teste de virtualização e rolagem a 60 FPS)
+  const handleTestSuperNode = () => {
+    const extensions = ['.ts', '.tsx', '.json', '.svg', '.md', '.css', '.html', '.config.js'];
+    const modules = ['core', 'components', 'utils', 'hooks', 'types', 'services', 'engine', 'workers'];
+
+    const mockFiles = Array.from({ length: 10000 }, (_, idx) => {
+      const ext = extensions[idx % extensions.length];
+      const mod = modules[idx % modules.length];
+      return {
+        id: `node_modules/@zerogira/${mod}/module_${idx + 1}${ext}`,
+        name: `module_${idx + 1}${ext}`,
+        path: `node_modules/@zerogira/${mod}/module_${idx + 1}${ext}`,
+        size: Math.floor(1024 + (idx * 317) % 350000),
+        type: 'file',
+        extension: ext,
+      };
+    });
+
+    openSuperNodePanel({
+      id: 'super_node_modules',
+      name: 'node_modules',
+      path: 'node_modules',
+      isSuperNode: true,
+      fileCount: 42500,
+      totalSize: 1288490188,
+      formattedSize: '1.2 GB',
+      extensionStats: [
+        { ext: '.ts', count: 17850, percentage: 42, color: '#38bdf8' },
+        { ext: '.json', count: 10200, percentage: 24, color: '#c084fc' },
+        { ext: '.svg', count: 7650, percentage: 18, color: '#22d3ee' },
+        { ext: '.md', count: 4250, percentage: 10, color: '#94a3b8' },
+        { ext: '.css', count: 2550, percentage: 6, color: '#f472b6' },
+      ],
+      items: mockFiles,
+    });
+  };
+
+  // Handler de clique em nós do grafo: se for pasta, abre o Drawer de Micro-Navegação; se arquivo, CodeViewer
+  const handleNodeClick = (node) => {
+    if (!node) return;
+    const isFolder = node.type === 'dir' || node.type === 'folder' || node.isDir;
+    if (isFolder) {
+      const folderPath = node.path || node.id || '';
+      let childFiles = node.items;
+      if (!childFiles || childFiles.length === 0) {
+        childFiles = (graphData?.nodes || []).filter((n) => {
+          if (n.type === 'dir' || n.isDir) return false;
+          return (
+            n.parentId === node.id ||
+            n.parent === node.id ||
+            (n.path && n.path.startsWith(folderPath + '/'))
+          );
+        });
+      }
+
+      openSuperNodePanel({
+        ...node,
+        fileCount: node.fileCount || childFiles.length,
+        items: childFiles,
+      });
+    } else {
+      setSelectedNode(node);
+    }
+  };
+
+  // Contagem de Super Nós presentes no grafo (prioriza stats do backend ou calcula por links)
+  const superNodeCount = useMemo(() => {
+    if (!graphData?.nodes) return 0;
+    if (typeof graphData.stats?.super_nodes === 'number') {
+      return graphData.stats.super_nodes;
+    }
+
+    const denseFolderNames = new Set([
+      'node_modules', 'dist', 'build', 'vendor', 'packages', 'assets', 'static', 'lib', 'docs', 'tests', 'test', 'locale', 'locales', 'translations', 'internal'
+    ]);
+
+    const folderFileCounts = new Map();
+    const nodeMap = new Map(graphData.nodes.map((n) => [n.id, n]));
+
+    (graphData.links || []).forEach((link) => {
+      const srcId = typeof link.source === 'object' ? link.source.id : link.source;
+      const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
+      const tgt = nodeMap.get(tgtId);
+      if (tgt && tgt.type !== 'dir' && tgt.type !== 'folder' && !tgt.isDir) {
+        folderFileCounts.set(srcId, (folderFileCounts.get(srcId) || 0) + 1);
+      }
+    });
+
+    let count = 0;
+    folderFileCounts.forEach((fCount, folderId) => {
+      const folder = nodeMap.get(folderId);
+      if (!folder || folder.id === 'root') return;
+      const lowerName = (folder.name || '').toLowerCase();
+      const threshold = denseFolderNames.has(lowerName) ? 8 : 15;
+      if (fCount >= threshold) count++;
+    });
+
+    return count;
+  }, [graphData]);
 
   // In-graph search filter
   const [filterTerm, setFilterTerm] = useState('');
@@ -156,6 +258,7 @@ export default function App() {
           setFilterTerm={setFilterTerm}
           isFullScreen={is3DFullScreen}
           onToggleFullScreen={toggleFullScreen}
+          onTestSuperNode={handleTestSuperNode}
         />
       )}
 
@@ -256,7 +359,7 @@ export default function App() {
               {viewMode === '3D' || is3DFullScreen ? (
                 <GraphViewer3D
                   graphData={graphData}
-                  onNodeClick={(node) => setSelectedNode(node)}
+                  onNodeClick={handleNodeClick}
                   filterTerm={filterTerm}
                   isFullScreen={is3DFullScreen}
                   onToggleFullScreen={toggleFullScreen}
@@ -264,7 +367,7 @@ export default function App() {
               ) : (
                 <GraphViewer2D
                   graphData={graphData}
-                  onNodeClick={(node) => setSelectedNode(node)}
+                  onNodeClick={handleNodeClick}
                   filterTerm={filterTerm}
                 />
               )}
@@ -275,6 +378,7 @@ export default function App() {
                 repoSlug={graphData.repo}
                 stars={graphData.stars}
                 isTruncated={graphData.is_truncated}
+                superNodeCount={superNodeCount}
                 floating={true}
               />
             </div>
@@ -303,6 +407,9 @@ export default function App() {
         defaultBranch={graphData?.default_branch}
         onClose={() => setSelectedNode(null)}
       />
+
+      {/* Drawer Lateral de Micro-Navegação (Super Nós & Virtualização) */}
+      <SuperNodeMicroPanel />
 
       {/* Modal de Token do GitHub Access */}
       <TokenModal

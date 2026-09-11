@@ -134,7 +134,10 @@ export const useAppStore = create((set) => ({
 
   // Posição Atual da Câmera (para renderizar o retângulo de viewport no Minimapa)
   cameraView: { x: 0, z: 0, zoom: 1 },
-  setCameraView: (view) => set({ cameraView: view }),
+  setCameraView: (view) =>
+    set((state) => ({
+      cameraView: typeof view === 'function' ? view(state.cameraView) : view,
+    })),
 
   // Estado do Web Worker / Carregamento do Grafo
   isLoadingGraph: false,
@@ -145,4 +148,26 @@ export const useAppStore = create((set) => ({
 
   workerError: null,
   setWorkerError: (error) => set({ workerError: error }),
+
+  // Super Nós e Painel Lateral de Micro-Navegação (DOM 2D Virtualizado)
+  activeSuperNode: null,
+  isSuperNodePanelOpen: false,
+  openSuperNodePanel: (superNode) =>
+    set({
+      activeSuperNode: superNode,
+      isSuperNodePanelOpen: true,
+      selectedNode: superNode,
+      focusedFolder: superNode,
+      isSidebarOpen: false, // Força o painel de controle 3D a recuar suavemente
+    }),
+  closeSuperNodePanel: () =>
+    set({
+      isSuperNodePanelOpen: false,
+      activeSuperNode: null,
+      isSidebarOpen: true, // Restaura o painel de controle 3D ao fechar
+    }),
+  toggleSuperNodePanel: () =>
+    set((state) => ({
+      isSuperNodePanelOpen: !state.isSuperNodePanelOpen,
+    })),
 }));

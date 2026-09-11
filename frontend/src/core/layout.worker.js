@@ -4,7 +4,7 @@
  * Web Worker para processar os layouts 3D ('classic', 'universe' ou 'physics' via d3-force-3d)
  * em background sem congelar a interface do usuário (60 FPS garantidos).
  */
-import { forceSimulation, forceLink, forceManyBody, forceCenter, forceY, forceRadial } from 'd3-force-3d';
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceY, forceRadial, forceCollide } from 'd3-force-3d';
 import { computeCylindricalLayout, computeUniverseLayout, computeSolarLayout } from './layoutEngine.js';
 
 self.onmessage = function (e) {
@@ -116,8 +116,13 @@ self.onmessage = function (e) {
       // 3. Repulsão equilibrada para manter cachos coesos sem explodir
       .force('charge', forceManyBody().strength(-120))
       .force('center', forceCenter(0, 0, 0))
-      // 4. "Prensador Hidráulico" Planar: Força agressiva no eixo Y para esmagar a nuvem em um Disco Galáctico fino
-      .force('y', forceY(0).strength(0.8));
+      // 4. Campo de força anti-penetração (forceCollide baseado no raio real do nó)
+      .force(
+        'collision',
+        forceCollide((d) => (d.radius || (d.isDir ? 8 : 1.6)) + 3).iterations(2)
+      )
+      // 5. Disco Volumétrico 3D (Lente Galáctica / Bulge): Suaviza força no Y de 0.8 para 0.15 para dar volume real sem caos
+      .force('y', forceY(0).strength(0.15));
 
     // Executa a simulação estaticamente no Worker
     simulation.tick(300);

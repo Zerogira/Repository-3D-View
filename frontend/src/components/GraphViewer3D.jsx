@@ -6,7 +6,7 @@ import SidebarFilterPanel from './SidebarFilterPanel';
 import MiniMap from './MiniMap';
 import { PerformanceStatsTextCard } from './3d/Environment/PerformanceStatsOverlay';
 import { useAppStore } from '../core/store';
-import { computeCylindricalLayout, computeUniverseLayout } from '../core/layoutEngine';
+import { computeCylindricalLayout, computeUniverseLayout, computeSolarLayout } from '../core/layoutEngine';
 
 /**
  * src/components/GraphViewer3D.jsx
@@ -68,7 +68,7 @@ export default function GraphViewer3D({
           setCalculatedData(payload);
         } else if (type === 'ERROR') {
           console.warn('Web Worker reportou erro, fallback para Main Thread:', error);
-          const fallbackFn = layoutMode === 'universe' ? computeUniverseLayout : computeCylindricalLayout;
+          const fallbackFn = layoutMode === 'solar' || layoutMode === 'quantum' ? computeSolarLayout : computeCylindricalLayout;
           const fallbackData = fallbackFn(graphData.nodes, graphData.links || []);
           setCalculatedData(fallbackData);
         }
@@ -77,7 +77,7 @@ export default function GraphViewer3D({
 
       worker.onerror = (err) => {
         console.warn('Erro no Web Worker, fallback para Main Thread:', err);
-        const fallbackFn = layoutMode === 'universe' ? computeUniverseLayout : computeCylindricalLayout;
+        const fallbackFn = layoutMode === 'solar' || layoutMode === 'quantum' ? computeSolarLayout : computeCylindricalLayout;
         const fallbackData = fallbackFn(graphData.nodes, graphData.links || []);
         setCalculatedData(fallbackData);
         setIsProcessingLayout(false);
@@ -87,7 +87,7 @@ export default function GraphViewer3D({
         nodes: graphData.nodes,
         links: graphData.links || graphData.hierarchyLinks || [],
         layout: layoutMode,
-        usePhysicsEngine: !!usePhysicsEngine,
+        usePhysicsEngine: layoutMode === 'quantum' || !!usePhysicsEngine,
       });
 
       return () => {
@@ -95,7 +95,7 @@ export default function GraphViewer3D({
       };
     } catch (err) {
       console.warn('Falha ao criar Web Worker, executando na Main Thread:', err);
-      const fallbackFn = layoutMode === 'universe' ? computeUniverseLayout : computeCylindricalLayout;
+      const fallbackFn = layoutMode === 'solar' || layoutMode === 'quantum' ? computeSolarLayout : computeCylindricalLayout;
       const fallbackData = fallbackFn(graphData.nodes, graphData.links || []);
       setCalculatedData(fallbackData);
       setIsProcessingLayout(false);

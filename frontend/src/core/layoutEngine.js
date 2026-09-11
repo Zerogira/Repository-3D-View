@@ -44,6 +44,111 @@ export function getFolderExclusionRadius(fileCount = 0, subfolderCount = 0) {
   return maxOrbitRadius + 30; // Margem de segurança livre de colisão
 }
 
+/**
+ * Formata bytes em string legível (B, KB, MB, GB)
+ */
+export function formatBytes(bytes = 0) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+/**
+ * Identifica e enriquece nós que atuam como Super Nós:
+ * - Diretórios com contagem de arquivos >= threshold (padrão 25)
+ * - Ou pastas hiperdensas específicas (ex: node_modules, dist, vendor, packages com >= 12 arquivos)
+ * - Calcula metadados agregados (totalFiles, totalSize, formattedSize, extensionStats, items)
+ */
+export function enrichSuperNodes(nodeMap, threshold = 15) {
+  const denseFolderNames = new Set([
+    'node_modules', 'dist', 'build', 'vendor', 'packages', 'assets', 'static', 'lib', 'docs', 'tests', 'test', 'locale', 'locales', 'translations', 'internal'
+  ]);
+
+  let superCount = 0;
+
+  nodeMap.forEach((node) => {
+    // Ignora arquivos e o nó raiz principal do repositório
+    if (!node.isDir || node.id === 'root' || node.isRoot) return;
+
+    const lowerName = (node.name || '').toLowerCase();
+    const isSpecialDenseName = denseFolderNames.has(lowerName);
+    const effectiveThreshold = isSpecialDenseName ? 8 : threshold;
+
+    const directCount = typeof node.fileCount === 'number' ? node.fileCount : 0;
+    const shouldBeSuperNode =
+      node.isSuperNode ||
+      node.is_super_node ||
+      directCount >= effectiveThreshold;
+
+    if (shouldBeSuperNode) {
+      node.isSuperNode = true;
+      superCount++;
+      node.color = '#f59e0b'; // Cor âmbar neon estelar oficial de Super Nós
+      node.superNodeColor = '#f59e0b';
+
+      // Coleta arquivos filhos deste diretório a partir do nodeMap e marca para NÃO explodir no 3D
+      const folderPath = node.path || node.id || '';
+      const childFiles = [];
+      let totalSize = 0;
+      const extCounts = {};
+
+      // Pacotes maciços de dependências ou vendor condensam subpastas inteiras recursivamente
+      const isVendorBundle = lowerName === 'node_modules' || lowerName === 'vendor' || lowerName === 'dist';
+
+      nodeMap.forEach((item) => {
+        if (item.isDir) return;
+        const isDirectChild = item.parentId === node.id || item.parent === node.id;
+        const isNestedChild = item.path && item.path.startsWith(folderPath + '/');
+
+        if (isDirectChild || (isVendorBundle && isNestedChild)) {
+          childFiles.push(item);
+          item.isCondensed = true; // MARCA O ARQUIVO COMO CONDENSADO (EXCLUÍDO DO CANVAS 3D)
+          totalSize += item.size || 0;
+          const name = item.name || '';
+          const dotIdx = name.lastIndexOf('.');
+          const ext = dotIdx !== -1 ? name.slice(dotIdx).toLowerCase() : 'sem ext';
+          extCounts[ext] = (extCounts[ext] || 0) + 1;
+        }
+      });
+
+      const totalFilesCount = Math.max(directCount, childFiles.length);
+      node.fileCount = totalFilesCount;
+      node.totalSize = totalSize;
+      node.formattedSize = formatBytes(totalSize);
+      node.formattedFileCount = totalFilesCount >= 1000 
+        ? `${(totalFilesCount / 1000).toFixed(1)}k`
+        : `${totalFilesCount}`;
+
+      // Top 5 extensões
+      node.extensionStats = Object.entries(extCounts)
+        .map(([ext, count]) => {
+          const percentage = totalFilesCount > 0 ? Math.round((count / totalFilesCount) * 100) : 0;
+          const catInfo = getNodeCategoryAndColor(ext, false);
+          return {
+            ext,
+            count,
+            percentage,
+            color: catInfo.color || '#38bdf8',
+          };
+        })
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      if (childFiles.length > 0) {
+        node.items = childFiles;
+      }
+
+      // Geometria diferenciada com raio dinâmico mais imponente
+      node.visualRadius = Math.min(26.0, 12.0 + Math.sqrt(totalFilesCount) * 1.6);
+      node.radius = node.visualRadius;
+    }
+  });
+
+  return superCount;
+}
+
 export function computeCylindricalLayout(rawNodes, rawLinks) {
   if (!Array.isArray(rawNodes) || rawNodes.length === 0) {
     return { nodes: [], links: [] };
@@ -78,7 +183,7 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
   const rootNode = nodeMap.get('root') || Array.from(nodeMap.values())[0]; 
   if (!rootNode) return { nodes: [], links: [] };
 
-  // 3. Calcula Massa (Weight) e Contagem de Arquivos
+  // 3. Calcula Massa (Weight), Contagem de Arquivos e Raio Dinâmico por Volume
   function calculateWeights(nodeId) {
     const node = nodeMap.get(nodeId);
     if (!node) return 1;
@@ -95,6 +200,17 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
     
     node.weight = weight;
     node.fileCount = fileCount;
+
+    // Escala dinâmica suave baseada em raiz quadrada do volume de arquivos
+    if (node.isDir) {
+      const isRoot = node.id === 'root' || node.depth === 0;
+      node.visualRadius = isRoot ? 14.0 : Math.min(22.0, 7.5 + Math.sqrt(fileCount) * 1.8);
+      node.radius = node.visualRadius;
+    } else {
+      node.visualRadius = 1.6;
+      node.radius = 1.6;
+    }
+
     return weight;
   }
   calculateWeights(rootNode.id);
@@ -143,6 +259,9 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
     });
   }
 
+  // 5. Enriquecimento de Super Nós (Executado após BFS para garantir integridade hierárquica)
+  enrichSuperNodes(nodeMap);
+
   const CONFIG = {
     ROOT_Y: 200,
     DEPTH_Y_STEP: 180, // Expansão vertical das camadas (evita colisão de saias e cones)
@@ -163,7 +282,7 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
       const pId = node.parentId || rootNode.id;
       if (!parentGroups[pId]) parentGroups[pId] = { folders: [], files: [] };
       if (node.isDir) parentGroups[pId].folders.push(node);
-      else parentGroups[pId].files.push(node);
+      else if (!node.isCondensed) parentGroups[pId].files.push(node);
     });
 
     Object.keys(parentGroups).forEach((parentId) => {
@@ -221,31 +340,34 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
 
       // ==========================================
       // B. LAYOUT DOS ARQUIVOS (Dispersão Dinâmica Proporcional ao Perímetro)
+      // Se a pasta for Super Nó, seus arquivos NÃO explodem no 3D (ficam no painel 2D)
       // ==========================================
-      const fileCount = files.length;
-      if (fileCount > 0) {
-        // Dispersão Dinâmica: o raio expande com base na quantidade de filhos
-        const dynamicBaseRadius = Math.max(34, (fileCount * 3.5) / 1.5);
-        const filesPerFloor = Math.min(16, Math.max(8, Math.floor(dynamicBaseRadius / 3.5)));
+      if (!parent.isSuperNode) {
+        const activeFiles = files.filter((f) => !f.isCondensed);
+        const fileCount = activeFiles.length;
+        if (fileCount > 0) {
+          const dynamicBaseRadius = Math.max(34, (fileCount * 3.5) / 1.5);
+          const filesPerFloor = Math.min(16, Math.max(8, Math.floor(dynamicBaseRadius / 3.5)));
 
-        let filesPlaced = 0;
-        let currentRing = 1;
+          let filesPlaced = 0;
+          let currentRing = 1;
 
-        while (filesPlaced < fileCount) {
-          const filesInThisRing = Math.min(filesPerFloor, fileCount - filesPlaced);
-          const ringRadius = dynamicBaseRadius + (currentRing - 1) * 6;
+          while (filesPlaced < fileCount) {
+            const filesInThisRing = Math.min(filesPerFloor, fileCount - filesPlaced);
+            const ringRadius = dynamicBaseRadius + (currentRing - 1) * 6;
 
-          for (let i = 0; i < filesInThisRing; i++) {
-            const node = files[filesPlaced + i];
-            const angle = (i / filesInThisRing) * (Math.PI * 2);
+            for (let i = 0; i < filesInThisRing; i++) {
+              const node = activeFiles[filesPlaced + i];
+              const angle = (i / filesInThisRing) * (Math.PI * 2);
 
-            node.x = parent.x + Math.cos(angle) * ringRadius;
-            node.z = parent.z + Math.sin(angle) * ringRadius;
-            node.y = parent.y + 24 + currentRing * 16;
+              node.x = parent.x + Math.cos(angle) * ringRadius;
+              node.z = parent.z + Math.sin(angle) * ringRadius;
+              node.y = parent.y + 24 + currentRing * 16;
+            }
+
+            filesPlaced += filesInThisRing;
+            currentRing++;
           }
-
-          filesPlaced += filesInThisRing;
-          currentRing++;
         }
       }
     });
@@ -277,9 +399,19 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
   const fogEnd = Math.ceil(maxRadius * 3.5);
   const maxCameraDistance = Math.ceil(maxRadius * 3.2);
 
+  // Filtra nós do 3D: exclui arquivos condensados em Super Nós (lidos exclusivamente no Drawer 2D)
+  const visibleNodes = Array.from(nodeMap.values()).filter((n) => !n.isCondensed);
+  const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
+  const visibleLinks = links.filter((l) => {
+    const src = typeof l.source === 'object' ? l.source.id : l.source;
+    const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+    return visibleNodeIds.has(src) && visibleNodeIds.has(tgt);
+  });
+
   return {
-    nodes: Array.from(nodeMap.values()),
-    links: links,
+    nodes: visibleNodes,
+    links: visibleLinks,
+    superNodeCount: visibleNodes.filter((n) => n.isSuperNode).length,
     layoutInfo: {
       minY,
       maxRadius,
@@ -467,6 +599,17 @@ export function computeSolarLayout(rawNodes, rawLinks) {
 
     node.weight = weight;
     node.fileCount = fileCount;
+
+    // Escala dinâmica suave baseada em raiz quadrada do volume de arquivos
+    if (node.isDir) {
+      const isRoot = node.id === 'root' || node.depth === 0;
+      node.visualRadius = isRoot ? 14.0 : Math.min(22.0, 7.5 + Math.sqrt(fileCount) * 1.8);
+      node.radius = node.visualRadius;
+    } else {
+      node.visualRadius = 1.6;
+      node.radius = 1.6;
+    }
+
     return weight;
   }
   calculateTreeWeights(rootNode.id);
@@ -479,6 +622,8 @@ export function computeSolarLayout(rawNodes, rawLinks) {
   rootNode.z = 0;
   rootNode.color = '#facc15';
   rootNode.branchColor = '#facc15';
+  rootNode.visualRadius = 14.0;
+  rootNode.radius = 14.0;
 
   // 5. Herança Cromática por Setores (Nível 1 define o setor da galáxia)
   const rootChildren = rootNode.children || [];
@@ -526,8 +671,10 @@ export function computeSolarLayout(rawNodes, rawLinks) {
     });
   }
 
-  // 6. Alocação Angular Recursiva em Fatias de Pizza (Radial Tree 2.5D)
-  // Cada nó pai aloca uma fatia angular [startAngle, endAngle] para seus filhos proporcional ao peso
+  // Enriquecimento de Super Nós executado após BFS
+  enrichSuperNodes(nodeMap);
+
+  // 6. Alocação Angular com "Camadas de Elétrons" e Sistema de Luas Locais
   const orbitRings = [];
 
   function layoutSubtree(node, startAngle, endAngle) {
@@ -537,69 +684,137 @@ export function computeSolarLayout(rawNodes, rawLinks) {
     const subFolders = children.filter((c) => c.isDir);
     const subFiles = children.filter((c) => !c.isDir);
 
-    // A. Posicionamento de Subpastas
+    // =========================================================================
+    // A. SUBPASTAS: Sweep Angle Allocation com Ângulo Mínimo & Padding de Fatias
+    // =========================================================================
     if (subFolders.length > 0) {
-      const totalSubFolderWeight = subFolders.reduce((sum, f) => sum + f.weight, 0);
-      let currentAngle = startAngle;
+      const isRoot = node.depth === 0;
       const angleSpan = endAngle - startAngle;
 
-      // Raio orbital da pasta baseado na profundidade (com escala suave para respiro)
-      const baseRadius = node.depth === 0 ? 110 : (node.depth * 80 + 30);
+      // 1. Expansão Radial Agressiva (Progressive Depth Step):
+      // Garante que órbitas profundas se abram amplamente e tenham espaço para seus leques
+      // depth 0 = Raiz (0)
+      // depth 1 = 195 (espaço amplo ao redor do sol)
+      // depth 2 = 195 + 120 + 25 = 340
+      // depth 3 = 195 + 240 + 75 = 510
+      const depth = (node.depth || 0) + 1;
+      const baseDistance = 85 + (depth * 105) + (depth * depth * 15);
 
-      subFolders.forEach((folder) => {
-        const proportion = totalSubFolderWeight > 0 ? folder.weight / totalSubFolderWeight : 1 / subFolders.length;
-        const childSpan = proportion * angleSpan;
-        const childMidAngle = currentAngle + childSpan / 2;
+      // 2. Garantia de Ângulo Mínimo & Padding entre Fatias (Proteção de Minorias)
+      const numFolders = subFolders.length;
+      // Gap vazio entre as fatias para criar corredores de respiro (2.5° na raiz, 1.5° nos subníveis)
+      const gapRad = (numFolders > 1) ? Math.min(0.06, (isRoot ? 0.045 : 0.025)) : 0;
+      const totalGaps = numFolders * gapRad;
+      const usableSpan = Math.max(0.1, angleSpan - totalGaps);
 
-        const distance = baseRadius;
-        folder.x = Math.cos(childMidAngle) * distance;
-        // Quase plano no Y com ruído sutil anti Z-fighting
-        folder.y = (Math.random() - 0.5) * 8;
-        folder.z = Math.sin(childMidAngle) * distance;
+      // Ângulo mínimo por fatia: pelo menos 14° (~0.24 rad) no Nível 1 ou proporção segura
+      const minAngleRad = isRoot 
+        ? Math.min(0.26, usableSpan / (numFolders * 1.2)) 
+        : Math.min(0.18, usableSpan / (numFolders * 1.1));
 
-        // Recurso recursivo para a próxima geração
+      // Calcula pesos individuais
+      const weights = subFolders.map((f) => Math.max(1, f.weight || 1));
+      const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+
+      // Distribuição proporcional com clamping de mínimo
+      let assignedSpans = weights.map((w) => (w / totalWeight) * usableSpan);
+
+      // Ajuste iterativo: se algum galho ficou abaixo do mínimo, força o mínimo e reequilibra
+      let deficit = 0;
+      let flexibleWeight = 0;
+
+      for (let i = 0; i < numFolders; i++) {
+        if (assignedSpans[i] < minAngleRad) {
+          deficit += minAngleRad - assignedSpans[i];
+          assignedSpans[i] = minAngleRad;
+        } else {
+          flexibleWeight += weights[i];
+        }
+      }
+
+      // Subtrai o déficit dos ramos grandes que têm espaço de sobra
+      if (deficit > 0 && flexibleWeight > 0) {
+        for (let i = 0; i < numFolders; i++) {
+          if (assignedSpans[i] > minAngleRad) {
+            const share = weights[i] / flexibleWeight;
+            assignedSpans[i] = Math.max(minAngleRad, assignedSpans[i] - deficit * share);
+          }
+        }
+      }
+
+      let currentAngle = startAngle;
+
+      subFolders.forEach((folder, idx) => {
+        const childSpan = assignedSpans[idx];
+        const childAngle = currentAngle + childSpan / 2;
+
+        // Leve alternância radial (stagger) para desobstruir planetas vizinhos
+        const staggerRadius = (idx % 2 === 1) ? 28 : 0;
+        const finalRadius = baseDistance + staggerRadius;
+
+        folder.x = Math.cos(childAngle) * finalRadius;
+        folder.y = (Math.random() - 0.5) * 6; // Quase plano no Y anti Z-fighting
+        folder.z = Math.sin(childAngle) * finalRadius;
+
+        // Recursão para a subárvore da pasta dentro de sua fatia angular dedicada
         layoutSubtree(folder, currentAngle, currentAngle + childSpan);
-        currentAngle += childSpan;
+
+        // Avança o ângulo somando a fatia + o corredor vazio (padding)
+        currentAngle += childSpan + gapRad;
       });
     }
 
-    // B. Posicionamento de Arquivos Orbitais Folha (Mini-anéis orbitando a pasta pai)
-    if (subFiles.length > 0) {
-      const fileCount = subFiles.length;
-      // Anéis concêntricos locais logo ao redor da pasta pai
-      const localBaseRadius = Math.max(16, Math.min(45, (fileCount * 2.8) / 1.5));
-      const ringSpacing = 14;
+    // =========================================================================
+    // B. ARQUIVOS: Empacotamento de Luas Estritamente Confinadas
+    // Se a pasta for Super Nó, seus arquivos NÃO geram órbitas nem luas em 3D!
+    // =========================================================================
+    if (subFiles.length > 0 && !node.isSuperNode) {
+      const activeSubFiles = subFiles.filter((f) => !f.isCondensed);
+      const fileCount = activeSubFiles.length;
+      if (fileCount > 0) {
+        const parentX = node.x || 0;
+        const parentY = node.y || 0;
+        const parentZ = node.z || 0;
 
-      let filesPlaced = 0;
-      let ringIndex = 0;
+        // O raio da órbita das luas começa logo após o corpo do planeta pai
+        const parentBodyRadius = node.visualRadius || 7.5;
+        const moonBaseOrbit = parentBodyRadius + 7.0;
+        const moonRingSpacing = 7.5;
+        const maxAllowedMoonRadius = 45;
 
-      while (filesPlaced < fileCount) {
-        const currentRingRadius = localBaseRadius + ringIndex * ringSpacing;
-        const capacity = Math.max(6, Math.floor((currentRingRadius * Math.PI * 2) / 14));
-        const countInRing = Math.min(capacity, fileCount - filesPlaced);
+        let filesPlaced = 0;
+        let ringIndex = 0;
 
-        orbitRings.push({
-          parentId: node.id,
-          x: node.x || 0,
-          y: node.y || 0,
-          z: node.z || 0,
-          radius: currentRingRadius,
-          color: node.branchColor || node.color || '#38bdf8',
-        });
+        while (filesPlaced < fileCount) {
+          const calculatedRadius = moonBaseOrbit + ringIndex * moonRingSpacing;
+          const currentRingRadius = Math.min(maxAllowedMoonRadius, calculatedRadius);
+          
+          const capacity = Math.max(6, Math.floor((currentRingRadius * Math.PI * 2) / 8.0));
+          const countInRing = Math.min(capacity, fileCount - filesPlaced);
 
-        for (let i = 0; i < countInRing; i++) {
-          const file = subFiles[filesPlaced + i];
-          const fileAngle = (i / countInRing) * (Math.PI * 2) + (ringIndex * 0.4);
+          orbitRings.push({
+            parentId: node.id,
+            x: parentX,
+            y: parentY,
+            z: parentZ,
+            radius: currentRingRadius,
+            color: node.branchColor || node.color || '#38bdf8',
+          });
 
-          file.x = (node.x || 0) + Math.cos(fileAngle) * currentRingRadius;
-          file.y = (node.y || 0) + (Math.random() - 0.5) * 6;
-          file.z = (node.z || 0) + Math.sin(fileAngle) * currentRingRadius;
-          file.orbitRadius = currentRingRadius;
-          file.orbitAngle = fileAngle;
+          for (let i = 0; i < countInRing; i++) {
+            const file = activeSubFiles[filesPlaced + i];
+            const fileAngle = (i / countInRing) * (Math.PI * 2) + (ringIndex * 0.5);
+
+            file.x = parentX + Math.cos(fileAngle) * currentRingRadius;
+            file.y = parentY + (Math.random() - 0.5) * 4;
+            file.z = parentZ + Math.sin(fileAngle) * currentRingRadius;
+            file.orbitRadius = currentRingRadius;
+            file.orbitAngle = fileAngle;
+          }
+
+          filesPlaced += countInRing;
+          ringIndex++;
         }
-
-        filesPlaced += countInRing;
-        ringIndex++;
       }
     }
   }
@@ -626,10 +841,20 @@ export function computeSolarLayout(rawNodes, rawLinks) {
   const fogEnd = Math.ceil(maxRadius * 3.5);
   const maxCameraDistance = Math.ceil(maxRadius * 3.2);
 
+  // Filtra nós do 3D: exclui arquivos condensados em Super Nós
+  const visibleNodes = Array.from(nodeMap.values()).filter((n) => !n.isCondensed);
+  const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
+  const visibleLinks = links.filter((l) => {
+    const src = typeof l.source === 'object' ? l.source.id : l.source;
+    const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+    return visibleNodeIds.has(src) && visibleNodeIds.has(tgt);
+  });
+
   return {
-    nodes,
-    links,
+    nodes: visibleNodes,
+    links: visibleLinks,
     orbitRings,
+    superNodeCount: visibleNodes.filter((n) => n.isSuperNode).length,
     layoutInfo: {
       minY,
       maxRadius,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Key, ArrowLeft, GitBranch, Layers, BoxSelect, Filter, Maximize2, Minimize2 } from 'lucide-react';
+import { Box, Key, ArrowLeft, GitBranch, Layers, BoxSelect, Filter, Maximize2, Minimize2, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAppStore } from '../core/store';
 
@@ -20,6 +20,7 @@ export default function Navbar({
   setFilterTerm,
   isFullScreen = false,
   onToggleFullScreen,
+  onTestSuperNode,
 }) {
   return (
     <header
@@ -143,6 +144,18 @@ export default function Navbar({
             <Key className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">{hasToken ? 'Token Ativo' : 'API Token'}</span>
           </button>
+
+          {/* Botão de Demonstração / Teste do Super Nó (Micro-Navegação) */}
+          {currentView === 'WORKSPACE' && onTestSuperNode && (
+            <button
+              onClick={onTestSuperNode}
+              className="px-3 py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(245,158,11,0.15)] cursor-pointer"
+              title="Simular abertura de Super Nó com 10.000 arquivos virtualizados"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Testar Super Nó</span>
+            </button>
+          )}
 
           {/* Botão de Tela Cheia Verdadeira Minimalista Integrado ao Header */}
           {currentView === 'WORKSPACE' && onToggleFullScreen && (

@@ -14,31 +14,50 @@ const centerVector = new THREE.Vector3(0, 0, 0);
  */
 function NativeLabelText({ node, isDir = false, opacity = 1 }) {
   const isRootNode = Boolean(node.isRoot || node.depth === 0 || node.id === 'root');
-  
-  // Altura Y Dinâmica: posiciona o texto elegantemente acima da esfera sem colidir
-  const dirScale = isRootNode ? 14.0 : (7.5 + Math.max(0, 4 - (node.depth || 0)) * 0.75);
-  const nodeRadius = isDir ? 2.0 * dirScale : 1.5 * 3.2;
-  const margin = isRootNode ? 12 : (isDir ? 8 : 4.5);
+  const isSuperNode = Boolean(node.isSuperNode);
+
+  // Altura Y Dinâmica: posiciona o texto elegantemente acima da esfera/poliedro sem colidir
+  const nodeRadius = node.visualRadius || (isRootNode ? 14.0 : (isDir ? 8.0 : 1.6));
+  const margin = isSuperNode ? 14 : (isRootNode ? 12 : (isDir ? 7 : 4.5));
   const posY = (node.y || 0) + nodeRadius + margin;
 
-  // Cores de texto e outline baseadas na categoria
-  const mainColor = isRootNode
+  // Cores de texto e outline baseadas na categoria / Super Nó
+  const mainColor = isSuperNode
+    ? '#fbbf24'
+    : isRootNode
     ? '#fef08a'
     : isDir
     ? '#38bdf8'
     : (node.color || '#f472b6');
 
-  const displayText = isRootNode
-    ? `☀️ ${String(node.name || node.id).toUpperCase()}`
-    : isDir
-    ? `📁 ${String(node.name || node.id).toUpperCase()}`
-    : String(node.name || node.id);
+  // Formato do texto: Super Nós exibem contagem e volume agregado
+  let displayText;
+  if (isSuperNode) {
+    const countStr = node.formattedFileCount || (node.fileCount >= 1000 ? `${(node.fileCount / 1000).toFixed(1)}k` : node.fileCount || '0');
+    const sizeStr = node.formattedSize || '0 B';
+    displayText = `⚡ [${String(node.name || node.id)}] (${countStr} arqs | ${sizeStr})`;
+  } else if (isRootNode) {
+    displayText = `☀️ ${String(node.name || node.id).toUpperCase()}`;
+  } else if (isDir) {
+    displayText = `📁 ${String(node.name || node.id).toUpperCase()}`;
+  } else {
+    displayText = String(node.name || node.id);
+  }
 
-  const fontSize = isRootNode ? 5.5 : isDir ? 3.8 : 2.2;
+  const fontSize = isSuperNode ? 4.5 : (isRootNode ? 5.5 : isDir ? 3.8 : 2.2);
 
   const handleClick = (e) => {
     e.stopPropagation();
     useAppStore.getState().setSelectedNode(node);
+    if (isSuperNode) {
+      useAppStore.getState().openSuperNodePanel(node);
+      useAppStore.getState().setCameraTarget({
+        x: node.x || 0,
+        y: node.y || 0,
+        z: node.z || 0,
+        isSuperNode: true,
+      });
+    }
   };
 
   return (
@@ -133,11 +152,11 @@ export default function LabelsRender({ nodes = [] }) {
       const camY = state.camera.position.y;
       const camZ = state.camera.position.z;
 
-      // Pastas: Raiz sempre visível + até 30 pastas mais próximas
+      // Pastas: Raiz e Super Nós sempre visíveis como marcos + até 30 pastas mais próximas
       const nearbyDirs = [];
       for (let i = 0; i < dirNodes.length; i++) {
         const dn = dirNodes[i];
-        if (dn.isRoot || dn.depth === 0 || dn.id === 'root') {
+        if (dn.isRoot || dn.depth === 0 || dn.id === 'root' || dn.isSuperNode) {
           nearbyDirs.push({ node: dn, distSq: -1 });
           continue;
         }
@@ -151,7 +170,7 @@ export default function LabelsRender({ nodes = [] }) {
         }
       }
       nearbyDirs.sort((a, b) => a.distSq - b.distSq);
-      setActiveDirNodes(nearbyDirs.slice(0, 30).map((d) => d.node));
+      setActiveDirNodes(nearbyDirs.slice(0, 35).map((d) => d.node));
     }
   });
 
