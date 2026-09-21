@@ -15,7 +15,7 @@ import { fetchRepositoryGraph } from './services/api';
 import { useAppStore } from './core/store';
 
 export default function App() {
-  const [viewMode, setViewMode] = useState('3D'); // '3D' | '2D'
+  const [viewMode, setViewMode] = useState('2D'); // '2D' inicial como porta de boas-vindas | '3D'
   const [currentView, setCurrentView] = useState('HOME'); // 'HOME' | 'WORKSPACE'
   const [activeRepo, setActiveRepo] = useState('vuejs/core');
   const [graphData, setGraphData] = useState(null);
@@ -44,6 +44,12 @@ export default function App() {
         setIs3DFullScreen(false);
       });
     }
+  };
+
+  // Dispara a entrada direta no Modo Galaxy 3D em Tela Cheia
+  const handleOpenGalaxy3DFullScreen = () => {
+    setViewMode('3D');
+    toggleFullScreen();
   };
 
   useEffect(() => {
@@ -219,6 +225,7 @@ export default function App() {
     setErrorStatus(null);
     setSelectedNode(null);
     setFilterTerm('');
+    setViewMode('2D'); // Garante início sempre em 2D como porta de boas-vindas
 
     try {
       const data = await fetchRepositoryGraph(repoSlug);
@@ -380,6 +387,8 @@ export default function App() {
                 isTruncated={graphData.is_truncated}
                 superNodeCount={superNodeCount}
                 floating={true}
+                viewMode={viewMode}
+                onOpenGalaxy3D={handleOpenGalaxy3DFullScreen}
               />
             </div>
           ) : null}

@@ -37,17 +37,27 @@ export default function MiniMap({ graphData, nodes: propNodes, links: propLinks,
   const rangeX = Math.max(1, maxX - minX);
   const rangeZ = Math.max(1, maxZ - minZ);
 
-  // Converte posição do clique (0 a 100 no SVG) para coordenadas reais 3D/2D
+  // Converte posição do clique (0 a 100 no SVG) para coordenadas reais 3D/2D com restrição rígida (Clamp)
   const handleMapInteraction = useCallback(
     (e) => {
       if (!svgRef.current) return;
       const rect = svgRef.current.getBoundingClientRect();
-      const svgX = ((e.clientX - rect.left) / rect.width) * 100;
-      const svgZ = ((e.clientY - rect.top) / rect.height) * 100;
+      const rawSvgX = ((e.clientX - rect.left) / rect.width) * 100;
+      const rawSvgZ = ((e.clientY - rect.top) / rect.height) * 100;
+
+      // Limita estritamente a interação dentro da área de projeção real dos nós [9, 91]
+      const clampedSvgX = Math.max(9, Math.min(91, rawSvgX));
+      const clampedSvgZ = Math.max(9, Math.min(91, rawSvgZ));
 
       // Desfaz a projeção ((val - min) / range) * 82 + 9
-      const realX = ((svgX - 9) / 82) * rangeX + minX;
-      const realZ = ((svgZ - 9) / 82) * rangeZ + minZ;
+      const calculatedX = ((clampedSvgX - 9) / 82) * rangeX + minX;
+      const calculatedZ = ((clampedSvgZ - 9) / 82) * rangeZ + minZ;
+
+      // Clamping adicional com folga máxima de respiro (5%) garantindo que a câmera nunca vá para o infinito
+      const paddingX = rangeX * 0.05;
+      const paddingZ = rangeZ * 0.05;
+      const realX = Math.max(minX - paddingX, Math.min(maxX + paddingX, calculatedX));
+      const realZ = Math.max(minZ - paddingZ, Math.min(maxZ + paddingZ, calculatedZ));
 
       if (onPanTo) {
         onPanTo(realX, realZ);
@@ -55,7 +65,7 @@ export default function MiniMap({ graphData, nodes: propNodes, links: propLinks,
         setCameraTarget({ x: realX, y: 0, z: realZ, isMinimapPan: true });
       }
     },
-    [minX, rangeX, minZ, rangeZ, setCameraTarget, onPanTo]
+    [minX, maxX, rangeX, minZ, maxZ, rangeZ, setCameraTarget, onPanTo]
   );
 
   const handlePointerDown = (e) => {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FileCode, FolderTree, Star, PieChart, Layers, ChevronRight, ChevronLeft, Sparkles } from 'lucide-react';
+import { FileCode, FolderTree, Star, PieChart, Layers, ChevronRight, ChevronLeft, Sparkles, BoxSelect, Maximize2 } from 'lucide-react';
 
 /**
  * src/components/SidebarStats.jsx
@@ -8,7 +8,16 @@ import { FileCode, FolderTree, Star, PieChart, Layers, ChevronRight, ChevronLeft
  * Painel de Estatísticas Flutuante em Glassmorphism (Ancorado no Canto Superior Direito).
  * Permite ao usuário recolher o painel para limpar 100% da tela para o 3D.
  */
-export default function SidebarStats({ stats, repoSlug, stars, isTruncated, floating = false, superNodeCount = 0 }) {
+export default function SidebarStats({
+  stats,
+  repoSlug,
+  stars,
+  isTruncated,
+  floating = false,
+  superNodeCount = 0,
+  viewMode = '2D',
+  onOpenGalaxy3D,
+}) {
   const [isOpen, setIsOpen] = useState(true);
 
   if (!stats) return null;
@@ -27,6 +36,21 @@ export default function SidebarStats({ stats, repoSlug, stars, isTruncated, floa
           </div>
         )}
       </div>
+
+      {/* Botão de Boas-Vindas: Atalho com destaque para imersão 3D */}
+      {viewMode === '2D' && onOpenGalaxy3D && (
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={onOpenGalaxy3D}
+          className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-neon-cyan hover:shadow-neon-pink-sm transition-all cursor-pointer group"
+          title="Mergulhar no espaço tridimensional com visualização em tela cheia"
+        >
+          <BoxSelect className="w-4 h-4 text-cyan-200 group-hover:rotate-12 transition-transform" />
+          <span>🌌 Abrir Modo Galaxy 3D</span>
+          <Maximize2 className="w-3 h-3 ml-auto opacity-70" />
+        </motion.button>
+      )}
 
       {isTruncated && (
         <div className="p-2 bg-amber-950/60 border border-amber-500/40 rounded-xl text-[10px] text-amber-300">

@@ -256,7 +256,7 @@ export default function NodesRender({ nodes = [] }) {
         }
 
         const isHovered = hoveredState.type === 'file' && hoveredState.index === i;
-        const scale = isHovered ? 2.5 : 1.2;
+        const scale = isHovered ? 3.8 : 2.2;
 
         const breatheY = isQuantum
           ? Math.sin(elapsed * 1.6 + i * 0.45) * 1.5

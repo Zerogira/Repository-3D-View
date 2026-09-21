@@ -32,6 +32,7 @@ export default function GraphViewer2D({ graphData, onNodeClick, filterTerm = '' 
   const showFileGeometry = useAppStore((s) => s.showFileGeometry);
   const selectedNode = useAppStore((s) => s.selectedNode);
   const setSelectedNode = useAppStore((s) => s.setSelectedNode);
+  const focusedFolder = useAppStore((s) => s.focusedFolder);
   const hoveredNode = useAppStore((s) => s.hoveredNode);
   const setHoveredNode = useAppStore((s) => s.setHoveredNode);
   const openSuperNodePanel = useAppStore((s) => s.openSuperNodePanel);
@@ -172,8 +173,18 @@ export default function GraphViewer2D({ graphData, onNodeClick, filterTerm = '' 
       })
       .filter((l) => visibleNodeIds.has(l.source) && visibleNodeIds.has(l.target));
 
+    // Ordenação dos nós: Diretórios e Raiz desenhados PRIMEIRO (na base), Arquivos DEPOIS (no topo)
+    // Isso garante que as bolinhas dos arquivos fiquem visíveis e sobrepostas, recebendo prioridade no hover
+    const sortedNodes = [...filteredNodes].sort((a, b) => {
+      const aIsDir = a.isDir || a.type === 'folder' || a.id === 'root';
+      const bIsDir = b.isDir || b.type === 'folder' || b.id === 'root';
+      if (aIsDir && !bIsDir) return -1;
+      if (!aIsDir && bIsDir) return 1;
+      return 0;
+    });
+
     return {
-      nodes: filteredNodes,
+      nodes: sortedNodes,
       links: filteredLinks,
     };
   }, [baseLayout, activeCategories, showFileGeometry, filterTerm]);
@@ -323,26 +334,35 @@ export default function GraphViewer2D({ graphData, onNodeClick, filterTerm = '' 
         ctx.stroke();
 
       } else {
-        // ARQUIVO REGULAR
-        const radius = Math.max(2.5, Math.min(5.5, (node.val || 4) * 0.6));
+        // ARQUIVO REGULAR: Bolinha aumentada com borda cibernética e contraste perfeito
+        const radius = Math.max(5.0, Math.min(7.5, (node.val || 4) * 0.8));
 
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
         ctx.fillStyle = baseColor;
         ctx.fill();
 
-        if (isHovered || isSelected) {
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2;
-          ctx.stroke();
+        // Borda sutil nos arquivos para destacá-los do fundo escuro
+        ctx.strokeStyle = isHovered || isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = isHovered || isSelected ? 2.5 : 1.0;
+        ctx.stroke();
+
+        // Glow neon pulsante suave se hovered
+        if (isHovered) {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, radius + 3, 0, 2 * Math.PI);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+          ctx.fill();
         }
       }
 
-      // B. RÓTULOS DE TEXTO (LOD - Level of Detail)
+      // B. RÓTULOS DE TEXTO (LOD - Level of Detail Inteligente)
+      // Evita sobreposição em massa: arquivos mostram rótulos no hover, ou se buscados, ou se a pasta estiver em foco, ou em zoom próximo
+      const isParentFocused = focusedFolder && (node.parentId === focusedFolder.id || node.parent === focusedFolder.id);
       const shouldShowLabel =
         (showLabels && isSuperNode) ||
         (showLabels && showFolderLabels && (isFolder || isRoot)) ||
-        (showLabels && showFileLabels && !isFolder && (globalScale > 1.3 || isHovered || (isSearchActive && isMatched)));
+        (showLabels && showFileLabels && !isFolder && (isHovered || isSelected || isParentFocused || (isSearchActive && isMatched) || globalScale > 2.0));
 
       if (shouldShowLabel) {
         const name = node.name || node.id || '';
@@ -355,16 +375,18 @@ export default function GraphViewer2D({ graphData, onNodeClick, filterTerm = '' 
 
         const fontSize = isSuperNode 
           ? Math.max(10, Math.min(14, 11 / Math.sqrt(globalScale)))
-          : Math.max(8, Math.min(12, 10 / Math.sqrt(globalScale)));
+          : (isFolder ? Math.max(9, Math.min(13, 10 / Math.sqrt(globalScale))) : Math.max(8, Math.min(11, 9 / Math.sqrt(globalScale))));
 
         ctx.font = `600 ${fontSize}px "Outfit", system-ui, -apple-system, sans-serif`;
         const textMetrics = ctx.measureText(labelText);
         const textWidth = textMetrics.width;
         const textHeight = fontSize * 1.2;
-        const paddingX = 6;
-        const paddingY = 3;
+        const paddingX = 5;
+        const paddingY = 2;
 
-        const badgeY = node.y + (isSuperNode ? 18 : (isFolder ? 14 : 6));
+        // Posiciona a pílula de texto AFASTADA da bolinha (evita cobrir o círculo do nó)
+        const nodeRadius = isSuperNode ? 18 : (isFolder ? 14 : 7);
+        const badgeY = node.y + nodeRadius + 4;
         const badgeX = node.x - textWidth / 2 - paddingX;
         const badgeW = textWidth + paddingX * 2;
         const badgeH = textHeight + paddingY * 2;
@@ -376,10 +398,10 @@ export default function GraphViewer2D({ graphData, onNodeClick, filterTerm = '' 
         } else {
           ctx.rect(badgeX, badgeY, badgeW, badgeH);
         }
-        ctx.fillStyle = isSuperNode ? 'rgba(20, 14, 4, 0.92)' : 'rgba(7, 10, 18, 0.88)';
+        ctx.fillStyle = isSuperNode ? 'rgba(20, 14, 4, 0.94)' : 'rgba(7, 10, 18, 0.90)';
         ctx.fill();
-        ctx.strokeStyle = isSuperNode ? '#f59e0b' : (isHovered ? '#ffffff' : 'rgba(148, 163, 184, 0.3)');
-        ctx.lineWidth = isSuperNode ? 1.2 : 0.8;
+        ctx.strokeStyle = isSuperNode ? '#f59e0b' : (isHovered ? '#ffffff' : (isFolder ? 'rgba(148, 163, 184, 0.4)' : 'rgba(56, 189, 248, 0.3)'));
+        ctx.lineWidth = isSuperNode || isHovered ? 1.2 : 0.7;
         ctx.stroke();
 
         // Texto com alto contraste
@@ -391,17 +413,28 @@ export default function GraphViewer2D({ graphData, onNodeClick, filterTerm = '' 
 
       ctx.restore();
     },
-    [filterTerm, hoveredNode, selectedNode, showLabels, showFolderLabels, showFileLabels]
+    [filterTerm, hoveredNode, selectedNode, focusedFolder, showLabels, showFolderLabels, showFileLabels]
   );
 
   // Pintura da Área de Clique para Hit-Testing Preciso (Independente de Zoom)
+  // Calibrado cirurgicamente: a pasta NÃO pode ter hit-box gigante que engula os nós de arquivos ao seu redor
   const drawNodePointerArea = useCallback((node, color, ctx, globalScale) => {
     const isSuperNode = node.isSuperNode;
     const isFolder = node.isDir || node.type === 'folder' || node.type === 'dir';
+    const isRoot = node.id === 'root' || node.depth === 0;
     const scale = globalScale || 1;
-    // Garante um raio de clique mínimo na tela de pelo menos 16 a 24 pixels reais
-    const minScreenRadius = isSuperNode ? 24 : (isFolder ? 20 : 16);
-    const hitRadius = Math.max(minScreenRadius / scale, isSuperNode ? 22 : (isFolder ? 16 : 10));
+
+    // Para pastas e raiz: raio restrito ao seu próprio corpo visual para não cobrir as bolinhas de arquivo filhas
+    // Para arquivos: raio generoso de pelo menos 14px na tela para clique fácil e preciso
+    let hitRadius;
+    if (isSuperNode) {
+      hitRadius = Math.max(16, 18 / scale);
+    } else if (isFolder || isRoot) {
+      hitRadius = Math.max(12, 14 / scale);
+    } else {
+      // Arquivo: hit-box confortável e prioritária
+      hitRadius = Math.max(9, 14 / scale);
+    }
 
     ctx.fillStyle = color;
     ctx.beginPath();

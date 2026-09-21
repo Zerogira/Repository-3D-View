@@ -346,15 +346,18 @@ export function computeCylindricalLayout(rawNodes, rawLinks) {
         const activeFiles = files.filter((f) => !f.isCondensed);
         const fileCount = activeFiles.length;
         if (fileCount > 0) {
-          const dynamicBaseRadius = Math.max(34, (fileCount * 3.5) / 1.5);
-          const filesPerFloor = Math.min(16, Math.max(8, Math.floor(dynamicBaseRadius / 3.5)));
+          // Raio base expandido de modo que as bolinhas fiquem bem afastadas do corpo da pasta
+          const dynamicBaseRadius = Math.max(52, 38 + Math.sqrt(fileCount) * 8.5);
+          // Quantidade de arquivos por anel baseada no perímetro para manter espaçamento amplo
+          const filesPerFloor = Math.min(18, Math.max(8, Math.floor((dynamicBaseRadius * Math.PI * 2) / 32)));
 
           let filesPlaced = 0;
           let currentRing = 1;
 
           while (filesPlaced < fileCount) {
             const filesInThisRing = Math.min(filesPerFloor, fileCount - filesPlaced);
-            const ringRadius = dynamicBaseRadius + (currentRing - 1) * 6;
+            // Espaçamento de 22 unidades entre cada anel orbital concêntrico
+            const ringRadius = dynamicBaseRadius + (currentRing - 1) * 22;
 
             for (let i = 0; i < filesInThisRing; i++) {
               const node = activeFiles[filesPlaced + i];
@@ -453,9 +456,9 @@ export function computeUniverseLayout(rawNodes, rawLinks) {
     if (fileCount === 0) return;
 
     // Distribuição orbital com expansão dinâmica por perímetro
-    // Se a pasta tiver 100 arquivos, o raio se expande massivamente para dar respiro
-    const minOrbitRadius = Math.max(34, (fileCount * 3.2) / 1.5);
-    const ringSpacing = 20 + Math.min(15, fileCount * 0.15);
+    // Se a pasta tiver muitos arquivos, o raio se expande para dar respiro
+    const minOrbitRadius = Math.max(52, 38 + Math.sqrt(fileCount) * 8.5);
+    const ringSpacing = 24 + Math.min(15, fileCount * 0.15);
 
     let filesPlaced = 0;
     let r = 0;
